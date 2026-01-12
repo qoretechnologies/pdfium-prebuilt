@@ -1,0 +1,146 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      pdfium_ref:
+        description: "PDFium commit hash"
+        required: true
+      chromium_milestone:
+        description: "Chromium milestone (example: M126)"
+        required: true
+      release_tag:
+        description: "Release tag (default: M<milestone>-YYYY-MM-DD)"
+        required: false
+        default: ""
+
+env:
+  DEPOT_TOOLS_UPDATE: "0"
+
+jobs:
+  build-ubuntu:
+    runs-on: ${{ matrix.runner }}
+    container: ubuntu:24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: [self-hosted, k8s, amd64]
+          - arch: arm64
+            runner: [self-hosted, k8s, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            clang \
+            curl \
+            git \
+            ninja-build \
+            pkg-config \
+            python3 \
+            tar \
+            xz-utils \
+            build-essential
+      - name: Build PDFium
+        run: |
+          ./scripts/build_pdfium.sh \
+            --pdfium-ref "${{ inputs.pdfium_ref }}" \
+            --target-os ubuntu \
+            --arch "${{ matrix.arch }}"
+      - name: Package PDFium
+        run: |
+          ./scripts/package_pdfium.sh \
+            --pdfium-src ./build/pdfium \
+            --pdfium-out ./build/pdfium/out/Release \
+            --target-os ubuntu \
+            --arch "${{ matrix.arch }}" \
+            --pdfium-ref "${{ inputs.pdfium_ref }}" \
+            --chromium-milestone "${{ inputs.chromium_milestone }}"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdfium-ubuntu-${{ matrix.arch }}
+          path: dist/*.tar.xz
+
+  build-alpine:
+    runs-on: ${{ matrix.runner }}
+    container: alpine:3.23
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: [self-hosted, k8s, amd64]
+          - arch: arm64
+            runner: [self-hosted, k8s, arm64]
+    steps:
+      - name: Install dependencies
+        shell: sh
+        run: |
+          apk add --no-cache \
+            bash \
+            clang \
+            curl \
+            git \
+            ninja \
+            pkgconf \
+            python3 \
+            tar \
+            xz \
+            build-base \
+            linux-headers
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build PDFium
+        shell: bash
+        run: |
+          ./scripts/build_pdfium.sh \
+            --pdfium-ref "${{ inputs.pdfium_ref }}" \
+            --target-os alpine \
+            --arch "${{ matrix.arch }}"
+      - name: Package PDFium
+        shell: bash
+        run: |
+          ./scripts/package_pdfium.sh \
+            --pdfium-src ./build/pdfium \
+            --pdfium-out ./build/pdfium/out/Release \
+            --target-os alpine \
+            --arch "${{ matrix.arch }}" \
+            --pdfium-ref "${{ inputs.pdfium_ref }}" \
+            --chromium-milestone "${{ inputs.chromium_milestone }}"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdfium-alpine-${{ matrix.arch }}
+          path: dist/*.tar.xz
+
+  release:
+    runs-on: [self-hosted, k8s, amd64]
+    needs:
+      - build-ubuntu
+      - build-alpine
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Set release tag
+        id: tag
+        run: |
+          if [[ -n "${{ inputs.release_tag }}" ]]; then
+            TAG="${{ inputs.release_tag }}"
+          else
+            DATE_TAG=$(date -u +%Y-%m-%d)
+            TAG="${{ inputs.chromium_milestone }}-${DATE_TAG}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          files: dist/**/*.tar.xz

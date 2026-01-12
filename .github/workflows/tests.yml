@@ -1,0 +1,16 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+
+jobs:
+  script-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run tests
+        run: ./tests/run.sh
