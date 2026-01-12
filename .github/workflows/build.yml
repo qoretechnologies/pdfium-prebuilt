@@ -19,19 +19,29 @@ env:
 
 jobs:
   build-ubuntu:
-    runs-on: ${{ matrix.runner }}
+    runs-on: self-hosted
     container: ubuntu:24.04
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
-            runner: [self-hosted, k8s, amd64]
           - arch: arm64
-            runner: [self-hosted, k8s, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Verify runner architecture
+        run: |
+          case "${{ matrix.arch }}" in
+            amd64) EXPECT_ARCH="x86_64" ;;
+            arm64) EXPECT_ARCH="aarch64" ;;
+            *) echo "Unsupported arch: ${{ matrix.arch }}" >&2; exit 1 ;;
+          esac
+          ACTUAL_ARCH="$(uname -m)"
+          if [[ "${ACTUAL_ARCH}" != "${EXPECT_ARCH}" ]]; then
+            echo "Runner arch ${ACTUAL_ARCH} does not match expected ${EXPECT_ARCH}" >&2
+            exit 1
+          fi
       - name: Install dependencies
         run: |
           apt-get update
@@ -67,16 +77,14 @@ jobs:
           path: dist/*.tar.xz
 
   build-alpine:
-    runs-on: ${{ matrix.runner }}
+    runs-on: self-hosted
     container: alpine:3.23
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
-            runner: [self-hosted, k8s, amd64]
           - arch: arm64
-            runner: [self-hosted, k8s, arm64]
     steps:
       - name: Install dependencies
         shell: sh
@@ -95,6 +103,19 @@ jobs:
             linux-headers
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Verify runner architecture
+        shell: bash
+        run: |
+          case "${{ matrix.arch }}" in
+            amd64) EXPECT_ARCH="x86_64" ;;
+            arm64) EXPECT_ARCH="aarch64" ;;
+            *) echo "Unsupported arch: ${{ matrix.arch }}" >&2; exit 1 ;;
+          esac
+          ACTUAL_ARCH="$(uname -m)"
+          if [[ "${ACTUAL_ARCH}" != "${EXPECT_ARCH}" ]]; then
+            echo "Runner arch ${ACTUAL_ARCH} does not match expected ${EXPECT_ARCH}" >&2
+            exit 1
+          fi
       - name: Build PDFium
         shell: bash
         run: |
@@ -119,7 +140,7 @@ jobs:
           path: dist/*.tar.xz
 
   release:
-    runs-on: [self-hosted, k8s, amd64]
+    runs-on: self-hosted
     needs:
       - build-ubuntu
       - build-alpine
