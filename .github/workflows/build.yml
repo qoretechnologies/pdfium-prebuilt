@@ -101,6 +101,7 @@ jobs:
             curl \
             git \
             gcompat \
+            glib-dev \
             gn \
             libc6-compat \
             ninja \
