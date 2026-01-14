@@ -122,7 +122,37 @@ if [[ -f /etc/alpine-release ]]; then
     echo "-- creating vpython3 wrapper for Alpine"
     cat > "${DEPOT_TOOLS_DIR}/vpython3" << 'WRAPPER'
 #!/bin/sh
-exec python3 "$@"
+# Wrapper to use system python3 instead of vpython3 on Alpine
+# Strips vpython-specific arguments and passes the rest to python3
+args=""
+skip_next=false
+found_separator=false
+for arg in "$@"; do
+    if $skip_next; then
+        skip_next=false
+        continue
+    fi
+    if [ "$arg" = "--" ]; then
+        found_separator=true
+        continue
+    fi
+    case "$arg" in
+        -vpython-spec|-vpython-root|-vpython-interpreter)
+            skip_next=true
+            continue
+            ;;
+        -vpython-*)
+            continue
+            ;;
+    esac
+    if $found_separator || [ -z "$args" ]; then
+        args="$arg"
+        found_separator=false
+    else
+        args="$args $arg"
+    fi
+done
+exec python3 $args
 WRAPPER
     chmod +x "${DEPOT_TOOLS_DIR}/vpython3"
 fi
