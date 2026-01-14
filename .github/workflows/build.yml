@@ -114,12 +114,14 @@ jobs:
       # doesn't work in Alpine containers on ARM64 runners
       - name: Checkout
         shell: sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           cd "$GITHUB_WORKSPACE"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           rm -rf .git
           git init
-          git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY"
           git fetch --depth=1 origin "$GITHUB_SHA"
           git checkout FETCH_HEAD
       - name: Verify runner architecture
