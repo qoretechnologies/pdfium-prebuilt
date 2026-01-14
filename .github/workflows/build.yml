@@ -19,14 +19,16 @@ env:
 
 jobs:
   build-ubuntu:
-    runs-on: self-hosted
+    runs-on: ${{ matrix.runner }}
     container: ubuntu:24.04
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
+            runner: [self-hosted, k8s, amd64]
           - arch: arm64
+            runner: [self-hosted, k8s, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,14 +79,18 @@ jobs:
           path: dist/*.tar.xz
 
   build-alpine:
-    runs-on: self-hosted
+    runs-on: ${{ matrix.runner }}
     container: alpine:3.23
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
+            runner: [self-hosted, k8s, amd64]
           - arch: arm64
+            runner: [self-hosted, k8s, arm64]
+    env:
+      VPYTHON_BYPASS: "1"
     steps:
       - name: Install dependencies
         shell: sh
@@ -94,6 +100,8 @@ jobs:
             clang \
             curl \
             git \
+            gcompat \
+            libc6-compat \
             ninja \
             pkgconf \
             python3 \
@@ -140,7 +148,7 @@ jobs:
           path: dist/*.tar.xz
 
   release:
-    runs-on: self-hosted
+    runs-on: [self-hosted, k8s, amd64]
     needs:
       - build-ubuntu
       - build-alpine
