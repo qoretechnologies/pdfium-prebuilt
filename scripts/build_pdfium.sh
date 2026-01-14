@@ -118,6 +118,14 @@ fi
 
 export PATH="${DEPOT_TOOLS_DIR}:${PATH}"
 
+# Use system gn if available (needed for Alpine/musl where depot_tools gn doesn't work)
+if [[ -x /usr/bin/gn ]]; then
+    GN_CMD="/usr/bin/gn"
+    echo "-- using system gn: ${GN_CMD}"
+else
+    GN_CMD="gn"
+fi
+
 if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
     mkdir -p "${BUILD_DIR}"
@@ -151,7 +159,7 @@ GN_ARGS_JOINED=$(IFS=" " ; echo "${GN_ARGS[*]}")
 
 echo "-- generating build files"
 mkdir -p "${OUT_DIR}"
-/usr/bin/env gn gen "${OUT_DIR}" --args="${GN_ARGS_JOINED}"
+${GN_CMD} gen "${OUT_DIR}" --args="${GN_ARGS_JOINED}"
 
 echo "-- building pdfium"
 /usr/bin/env ninja -C "${OUT_DIR}" -j "${JOBS}" pdfium

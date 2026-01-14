@@ -101,6 +101,7 @@ jobs:
             curl \
             git \
             gcompat \
+            gn \
             libc6-compat \
             ninja \
             pkgconf \
@@ -109,8 +110,16 @@ jobs:
             xz \
             build-base \
             linux-headers
+      # NOTE: Using manual git checkout because actions/checkout@v4 (JavaScript action)
+      # doesn't work in Alpine containers on ARM64 runners
       - name: Checkout
-        uses: actions/checkout@v4
+        shell: sh
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git init
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout FETCH_HEAD
       - name: Verify runner architecture
         shell: bash
         run: |
