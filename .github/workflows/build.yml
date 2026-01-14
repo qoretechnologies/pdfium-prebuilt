@@ -115,7 +115,9 @@ jobs:
       - name: Checkout
         shell: sh
         run: |
+          cd "$GITHUB_WORKSPACE"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          rm -rf .git
           git init
           git remote add origin "https://github.com/$GITHUB_REPOSITORY"
           git fetch --depth=1 origin "$GITHUB_SHA"
