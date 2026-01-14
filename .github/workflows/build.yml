@@ -107,6 +107,7 @@ jobs:
             pkgconf \
             python3 \
             tar \
+            wget \
             xz \
             build-base \
             linux-headers
