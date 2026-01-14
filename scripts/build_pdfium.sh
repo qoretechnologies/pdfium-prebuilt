@@ -116,6 +116,17 @@ if [[ ! -d "${DEPOT_TOOLS_DIR}" ]]; then
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "${DEPOT_TOOLS_DIR}"
 fi
 
+# On Alpine/musl, create vpython3 wrapper to use system Python
+# (depot_tools' vpython binaries are glibc-based and don't work on musl)
+if [[ -f /etc/alpine-release ]]; then
+    echo "-- creating vpython3 wrapper for Alpine"
+    cat > "${DEPOT_TOOLS_DIR}/vpython3" << 'WRAPPER'
+#!/bin/sh
+exec python3 "$@"
+WRAPPER
+    chmod +x "${DEPOT_TOOLS_DIR}/vpython3"
+fi
+
 export PATH="${DEPOT_TOOLS_DIR}:${PATH}"
 
 # Use system gn if available (needed for Alpine/musl where depot_tools gn doesn't work)

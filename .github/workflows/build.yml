@@ -105,12 +105,22 @@ jobs:
             libc6-compat \
             ninja \
             pkgconf \
+            py3-pip \
             python3 \
             tar \
             wget \
             xz \
             build-base \
             linux-headers
+          # Install Python deps for depot_tools (gclient)
+          pip3 install httplib2 PySocks --break-system-packages -q
+          # Create httplib2.socks shim (depot_tools expects this submodule)
+          python3 -c '
+          import httplib2, os
+          socks_file = os.path.join(os.path.dirname(httplib2.__file__), "socks.py")
+          with open(socks_file, "w") as f:
+              f.write("import socks as _socks\nfrom socks import *\nsocksocket = _socks.socksocket\nPROXY_TYPE_HTTP = _socks.HTTP\nPROXY_TYPE_HTTP_NO_TUNNEL = _socks.HTTP\nProxyError = _socks.ProxyError\n")
+          '
       # NOTE: Using manual git checkout because actions/checkout@v4 (JavaScript action)
       # doesn't work in Alpine containers on ARM64 runners
       - name: Checkout
