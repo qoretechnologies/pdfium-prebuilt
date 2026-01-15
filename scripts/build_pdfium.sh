@@ -159,6 +159,34 @@ fi
 
 export PATH="${DEPOT_TOOLS_DIR}:${PATH}"
 
+# Create cipd wrapper to skip unavailable packages (e.g., reclient for linux-arm64)
+# This is needed because custom_deps doesn't work for cipd dependencies
+# The wrapper filters the ensure file to remove problematic packages
+if [[ ! -f "${DEPOT_TOOLS_DIR}/.cipd_real" && -f "${DEPOT_TOOLS_DIR}/cipd" ]]; then
+    echo "-- creating cipd wrapper to skip unavailable packages"
+    mv "${DEPOT_TOOLS_DIR}/cipd" "${DEPOT_TOOLS_DIR}/.cipd_real"
+    cat > "${DEPOT_TOOLS_DIR}/cipd" << 'WRAPPER'
+#!/bin/bash
+# Wrapper to filter out unavailable cipd packages from ensure files
+REAL_CIPD="$(dirname "$0")/.cipd_real"
+ARGS=("$@")
+for i in "${!ARGS[@]}"; do
+    if [[ "${ARGS[$i]}" == "-ensure-file" && -n "${ARGS[$((i+1))]}" ]]; then
+        ENSURE_FILE="${ARGS[$((i+1))]}"
+        # Filter out linux-arm64 rbe/client package which doesn't exist
+        if grep -q "infra/rbe/client/linux-arm64" "$ENSURE_FILE" 2>/dev/null; then
+            FILTERED_FILE="${ENSURE_FILE}.filtered"
+            grep -v "infra/rbe/client/linux-arm64" "$ENSURE_FILE" > "$FILTERED_FILE"
+            ARGS[$((i+1))]="$FILTERED_FILE"
+            echo "Filtered unavailable package: infra/rbe/client/linux-arm64"
+        fi
+    fi
+done
+exec "$REAL_CIPD" "${ARGS[@]}"
+WRAPPER
+    chmod +x "${DEPOT_TOOLS_DIR}/cipd"
+fi
+
 # Use system gn on Alpine (it's new enough and depot_tools gn doesn't work on musl)
 # On Ubuntu, use depot_tools gn (system gn is too old, missing path_exists function)
 if [[ -f /etc/alpine-release && -x /usr/bin/gn ]]; then
