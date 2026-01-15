@@ -52,6 +52,7 @@ jobs:
             clang \
             curl \
             git \
+            libglib2.0-dev \
             ninja-build \
             pkg-config \
             python3 \
