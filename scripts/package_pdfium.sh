@@ -81,10 +81,25 @@ if [[ ! -f "${PDFIUM_LICENSE}" ]]; then
     exit 1
 fi
 
-LIB_SHARED="${PDFIUM_OUT}/libpdfium.so"
-LIB_STATIC="${PDFIUM_OUT}/libpdfium.a"
-if [[ ! -f "${LIB_SHARED}" && ! -f "${LIB_STATIC}" ]]; then
+# PDFium outputs libraries with various names depending on build configuration
+# Look for libpdfium.so, libpdfium.cr.so, or obj/libpdfium.a (thin archive)
+LIB_SHARED=""
+LIB_STATIC=""
+if [[ -f "${PDFIUM_OUT}/libpdfium.so" ]]; then
+    LIB_SHARED="${PDFIUM_OUT}/libpdfium.so"
+elif [[ -f "${PDFIUM_OUT}/libpdfium.cr.so" ]]; then
+    LIB_SHARED="${PDFIUM_OUT}/libpdfium.cr.so"
+fi
+if [[ -f "${PDFIUM_OUT}/obj/libpdfium.a" ]]; then
+    LIB_STATIC="${PDFIUM_OUT}/obj/libpdfium.a"
+elif [[ -f "${PDFIUM_OUT}/libpdfium.a" ]]; then
+    LIB_STATIC="${PDFIUM_OUT}/libpdfium.a"
+fi
+if [[ -z "${LIB_SHARED}" && -z "${LIB_STATIC}" ]]; then
     echo "Missing PDFium libraries in ${PDFIUM_OUT}" >&2
+    echo "Available files:" >&2
+    ls -la "${PDFIUM_OUT}/" >&2
+    ls -la "${PDFIUM_OUT}/obj/" 2>/dev/null >&2 || true
     exit 1
 fi
 
@@ -94,11 +109,12 @@ mkdir -p "${STAGE_DIR}/include" "${STAGE_DIR}/lib" "${STAGE_DIR}/LICENSES"
 
 cp -R "${PDFIUM_SRC}/public/." "${STAGE_DIR}/include/"
 
-if [[ -f "${LIB_SHARED}" ]]; then
-    cp "${LIB_SHARED}" "${STAGE_DIR}/lib/"
+if [[ -n "${LIB_SHARED}" ]]; then
+    # Always name output libpdfium.so for consistency
+    cp "${LIB_SHARED}" "${STAGE_DIR}/lib/libpdfium.so"
 fi
-if [[ -f "${LIB_STATIC}" ]]; then
-    cp "${LIB_STATIC}" "${STAGE_DIR}/lib/"
+if [[ -n "${LIB_STATIC}" ]]; then
+    cp "${LIB_STATIC}" "${STAGE_DIR}/lib/libpdfium.a"
 fi
 
 cp "${PDFIUM_LICENSE}" "${STAGE_DIR}/LICENSES/PDFIUM.LICENSE"
@@ -112,7 +128,9 @@ ARCH=${ARCH}
 BUILD_DATE_UTC=${BUILD_DATE}
 EOF_META
 
-TARBALL_NAME="pdfium-${PDFIUM_REF}-${TARGET_OS}-${ARCH}.tar.xz"
+# Sanitize ref name for filename (replace / with -)
+SAFE_REF="${PDFIUM_REF//\//-}"
+TARBALL_NAME="pdfium-${SAFE_REF}-${TARGET_OS}-${ARCH}.tar.xz"
 mkdir -p "${DIST_DIR}"
 
 tar -C "${STAGE_DIR}" -cJf "${DIST_DIR}/${TARBALL_NAME}" .
