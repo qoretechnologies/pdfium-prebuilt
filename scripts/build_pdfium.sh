@@ -231,7 +231,7 @@ fi
 
 GN_ARGS=(
     "is_debug=false"
-    "is_component_build=false"
+    "is_component_build=true"
     "pdf_is_standalone=true"
     "use_sysroot=false"
     "clang_use_chrome_plugins=false"
