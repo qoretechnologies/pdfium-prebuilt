@@ -201,6 +201,11 @@ cd "${PDFIUM_SRC_DIR}"
 git fetch origin
 git checkout "${PDFIUM_REF}"
 
+# Remove reclient dependency from DEPS (not available for linux-arm64)
+# This must be done before gclient sync to prevent cipd from failing
+echo "-- patching DEPS to remove reclient dependency"
+sed -i "/'buildtools\/reclient':/,/},$/d" "${PDFIUM_SRC_DIR}/DEPS"
+
 # Sync dependencies for the checked out ref
 echo "-- syncing dependencies"
 cd "${BUILD_DIR}"
