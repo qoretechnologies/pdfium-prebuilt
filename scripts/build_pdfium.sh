@@ -197,11 +197,23 @@ git checkout "${PDFIUM_REF}"
 # Patch bundled libc++ for musl support on Alpine
 if [[ -f /etc/alpine-release ]]; then
     echo "-- patching libc++ for musl support"
-    LIBCXX_CONFIG="${PDFIUM_SRC_DIR}/third_party/libc++/src/include/__config"
-    if [[ -f "${LIBCXX_CONFIG}" ]] && ! grep -q "_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE" "${LIBCXX_CONFIG}"; then
-        # Add musl rune table support at the beginning of the file (after any initial guards)
-        sed -i '1i #define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE' "${LIBCXX_CONFIG}"
-        echo "   patched ${LIBCXX_CONFIG}"
+    # Find and patch __locale file to add rune table support before the check
+    LIBCXX_LOCALE="${PDFIUM_SRC_DIR}/third_party/libc++/src/include/__locale"
+    if [[ -f "${LIBCXX_LOCALE}" ]]; then
+        # Add define before the #error check in __locale
+        sed -i 's/#  *error unknown rune table for this platform/#define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE\n\0/' "${LIBCXX_LOCALE}"
+        echo "   patched ${LIBCXX_LOCALE}"
+    else
+        echo "   warning: ${LIBCXX_LOCALE} not found"
+        # Try alternative location
+        LIBCXX_LOCALE="${PDFIUM_SRC_DIR}/buildtools/third_party/libc++/trunk/include/__locale"
+        if [[ -f "${LIBCXX_LOCALE}" ]]; then
+            sed -i 's/#  *error unknown rune table for this platform/#define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE\n\0/' "${LIBCXX_LOCALE}"
+            echo "   patched ${LIBCXX_LOCALE} (alternative location)"
+        else
+            echo "   warning: libc++ locale file not found, listing available:"
+            find "${PDFIUM_SRC_DIR}" -name "__locale" 2>/dev/null | head -5
+        fi
     fi
 fi
 
