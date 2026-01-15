@@ -192,7 +192,8 @@ solutions = [
   },
 ]
 GCLIENT
-    gclient sync
+    # Use --nohooks to skip cipd during initial fetch, patch DEPS, then run hooks
+    gclient sync --nohooks
     popd >/dev/null
 fi
 
