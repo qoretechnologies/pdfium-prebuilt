@@ -177,11 +177,15 @@ fi
 # so it won't be overwritten by self-updates
 echo "-- creating cipd wrapper to skip unavailable packages"
 CIPD_WRAPPER="${BUILD_DIR}/cipd_wrapper.sh"
+CIPD_LOG="${BUILD_DIR}/cipd_wrapper.log"
 REAL_CIPD_CLIENT="${DEPOT_TOOLS_DIR}/.cipd_client"
 cat > "${CIPD_WRAPPER}" << WRAPPER
 #!/bin/bash
 # Wrapper to filter out unavailable cipd packages from ensure files
 # Invoked via CUSTOM_CIPD_CLIENT before cipd's version check runs
+
+# Log invocation for debugging
+echo "\$(date): cipd_wrapper called with args: \$@" >> "${CIPD_LOG}"
 
 REAL_CIPD="${REAL_CIPD_CLIENT}"
 
@@ -195,14 +199,20 @@ for i in "\${!ARGS[@]}"; do
             grep -v "infra/rbe/client/linux-arm64" "\$ENSURE_FILE" > "\$FILTERED_FILE"
             ARGS[\$((i+1))]="\$FILTERED_FILE"
             echo "CIPD wrapper: Filtered unavailable package infra/rbe/client/linux-arm64" >&2
+            echo "\$(date): FILTERED \$ENSURE_FILE" >> "${CIPD_LOG}"
         fi
     fi
 done
+echo "\$(date): calling \${REAL_CIPD} \${ARGS[@]}" >> "${CIPD_LOG}"
 exec "\${REAL_CIPD}" "\${ARGS[@]}"
 WRAPPER
 chmod +x "${CIPD_WRAPPER}"
 export CUSTOM_CIPD_CLIENT="${CIPD_WRAPPER}"
 echo "   CUSTOM_CIPD_CLIENT=${CUSTOM_CIPD_CLIENT}"
+echo "   Wrapper at: ${CIPD_WRAPPER}"
+echo "   Real cipd at: ${REAL_CIPD_CLIENT}"
+ls -la "${CIPD_WRAPPER}" || echo "   WARNING: Wrapper not found!"
+ls -la "${REAL_CIPD_CLIENT}" || echo "   WARNING: Real cipd not found!"
 
 if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
