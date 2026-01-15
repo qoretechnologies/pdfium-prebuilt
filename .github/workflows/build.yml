@@ -98,12 +98,16 @@ jobs:
           apk add --no-cache \
             bash \
             clang \
+            clang-dev \
             curl \
             git \
             gcompat \
             glib-dev \
             gn \
+            libc++-dev \
             libc6-compat \
+            lld \
+            llvm \
             ninja \
             pkgconf \
             py3-pip \
