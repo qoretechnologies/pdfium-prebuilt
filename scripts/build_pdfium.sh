@@ -214,6 +214,10 @@ if [[ -f /etc/alpine-release ]]; then
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
         "use_custom_libcxx=false"
+        "libcxx_abi_unstable=false"
+        "use_libcxx=true"
+        "extra_cxxflags=\"-stdlib=libc++\""
+        "extra_ldflags=\"-stdlib=libc++ -lc++abi\""
     )
 fi
 
