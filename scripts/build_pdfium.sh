@@ -209,14 +209,15 @@ GN_ARGS=(
 # (bundled libc++ doesn't support musl out of the box)
 if [[ -f /etc/alpine-release ]]; then
     echo "-- configuring for Alpine (musl): using system clang and libc++"
+    # Get libc++ include path
+    LIBCXX_INCLUDE="/usr/include/c++/v1"
     GN_ARGS+=(
         "is_clang=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
         "use_custom_libcxx=false"
         "libcxx_abi_unstable=false"
-        "use_libcxx=true"
-        "extra_cxxflags=\"-stdlib=libc++\""
+        "extra_cxxflags=\"-nostdinc++ -isystem ${LIBCXX_INCLUDE}\""
         "extra_ldflags=\"-stdlib=libc++ -lc++abi\""
     )
 fi
