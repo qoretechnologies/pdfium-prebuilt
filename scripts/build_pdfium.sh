@@ -187,7 +187,7 @@ solutions = [
       "download_remoteexec_cfg": False,
     },
     "custom_deps": {
-      "pdfium/buildtools/reclient": None,
+      "buildtools/reclient": None,
     },
   },
 ]
