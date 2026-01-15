@@ -194,6 +194,17 @@ cd "${PDFIUM_SRC_DIR}"
 git fetch origin
 git checkout "${PDFIUM_REF}"
 
+# Patch bundled libc++ for musl support on Alpine
+if [[ -f /etc/alpine-release ]]; then
+    echo "-- patching libc++ for musl support"
+    LIBCXX_CONFIG="${PDFIUM_SRC_DIR}/third_party/libc++/src/include/__config"
+    if [[ -f "${LIBCXX_CONFIG}" ]] && ! grep -q "_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE" "${LIBCXX_CONFIG}"; then
+        # Add musl rune table support at the beginning of the file (after any initial guards)
+        sed -i '1i #define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE' "${LIBCXX_CONFIG}"
+        echo "   patched ${LIBCXX_CONFIG}"
+    fi
+fi
+
 GN_ARGS=(
     "is_debug=false"
     "is_component_build=false"
@@ -205,20 +216,13 @@ GN_ARGS=(
     "target_cpu=\"${TARGET_CPU}\""
 )
 
-# On Alpine/musl, use system clang and libc++ instead of bundled ones
-# (bundled libc++ doesn't support musl out of the box)
+# On Alpine/musl, use system clang and patch bundled libc++ headers for musl
 if [[ -f /etc/alpine-release ]]; then
-    echo "-- configuring for Alpine (musl): using system clang and libc++"
-    # Get libc++ include path
-    LIBCXX_INCLUDE="/usr/include/c++/v1"
+    echo "-- configuring for Alpine (musl): using system clang with patched libc++"
     GN_ARGS+=(
         "is_clang=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
-        "use_custom_libcxx=false"
-        "libcxx_abi_unstable=false"
-        "extra_cxxflags=\"-nostdinc++ -isystem ${LIBCXX_INCLUDE}\""
-        "extra_ldflags=\"-stdlib=libc++ -lc++abi\""
     )
 fi
 
