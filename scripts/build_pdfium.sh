@@ -171,48 +171,38 @@ else
     GN_CMD="gn"
 fi
 
-# Patch the cipd launcher script to filter out unavailable packages
+# Create CUSTOM_CIPD_CLIENT wrapper to skip unavailable packages (e.g., reclient for linux-arm64)
 # This is needed because custom_deps doesn't work for cipd dependencies
-# We inject filter logic at the start of the cipd script itself
-CIPD_LAUNCHER="${DEPOT_TOOLS_DIR}/cipd"
-if [[ -f "${CIPD_LAUNCHER}" ]] && ! grep -q "PDFIUM_CIPD_FILTER" "${CIPD_LAUNCHER}"; then
-    echo "-- patching cipd launcher to filter unavailable packages"
-    # Create filter script
-    FILTER_SCRIPT='
-# PDFIUM_CIPD_FILTER: Filter ensure files to remove unavailable packages
-_pdfium_filter_args() {
-    local -a new_args=()
-    local i=0
-    while [[ $i -lt $# ]]; do
-        local arg="${!i}"
-        ((i++)) || true
-        if [[ "$arg" == "-ensure-file" && $i -le $# ]]; then
-            local ensure_file="${!i}"
-            ((i++)) || true
-            if [[ -f "$ensure_file" ]] && grep -q "infra/rbe/client/linux-arm64" "$ensure_file" 2>/dev/null; then
-                local filtered="${ensure_file}.filtered"
-                grep -v "infra/rbe/client/linux-arm64" "$ensure_file" > "$filtered"
-                echo "CIPD: Filtered unavailable package infra/rbe/client/linux-arm64" >&2
-                new_args+=("-ensure-file" "$filtered")
-            else
-                new_args+=("-ensure-file" "$ensure_file")
-            fi
-        else
-            new_args+=("$arg")
+# CUSTOM_CIPD_CLIENT is checked BEFORE the version check in the cipd launcher,
+# so it won't be overwritten by self-updates
+echo "-- creating cipd wrapper to skip unavailable packages"
+CIPD_WRAPPER="${BUILD_DIR}/cipd_wrapper.sh"
+REAL_CIPD_CLIENT="${DEPOT_TOOLS_DIR}/.cipd_client"
+cat > "${CIPD_WRAPPER}" << WRAPPER
+#!/bin/bash
+# Wrapper to filter out unavailable cipd packages from ensure files
+# Invoked via CUSTOM_CIPD_CLIENT before cipd's version check runs
+
+REAL_CIPD="${REAL_CIPD_CLIENT}"
+
+ARGS=("\$@")
+for i in "\${!ARGS[@]}"; do
+    if [[ "\${ARGS[\$i]}" == "-ensure-file" && -n "\${ARGS[\$((i+1))]}" ]]; then
+        ENSURE_FILE="\${ARGS[\$((i+1))]}"
+        # Filter out linux-arm64 rbe/client package which doesn't exist
+        if grep -q "infra/rbe/client/linux-arm64" "\$ENSURE_FILE" 2>/dev/null; then
+            FILTERED_FILE="\${ENSURE_FILE}.filtered"
+            grep -v "infra/rbe/client/linux-arm64" "\$ENSURE_FILE" > "\$FILTERED_FILE"
+            ARGS[\$((i+1))]="\$FILTERED_FILE"
+            echo "CIPD wrapper: Filtered unavailable package infra/rbe/client/linux-arm64" >&2
         fi
-    done
-    echo "${new_args[@]}"
-}
-if [[ "$1" == "ensure" ]]; then
-    set -- $(_pdfium_filter_args "$@")
-fi
-# END PDFIUM_CIPD_FILTER
-'
-    # Insert filter after the shebang line
-    { head -1 "${CIPD_LAUNCHER}"; echo "${FILTER_SCRIPT}"; tail -n +2 "${CIPD_LAUNCHER}"; } > "${CIPD_LAUNCHER}.new"
-    mv "${CIPD_LAUNCHER}.new" "${CIPD_LAUNCHER}"
-    chmod +x "${CIPD_LAUNCHER}"
-fi
+    fi
+done
+exec "\${REAL_CIPD}" "\${ARGS[@]}"
+WRAPPER
+chmod +x "${CIPD_WRAPPER}"
+export CUSTOM_CIPD_CLIENT="${CIPD_WRAPPER}"
+echo "   CUSTOM_CIPD_CLIENT=${CUSTOM_CIPD_CLIENT}"
 
 if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
