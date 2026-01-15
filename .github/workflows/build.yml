@@ -99,6 +99,7 @@ jobs:
             bash \
             clang \
             clang-dev \
+            compiler-rt \
             curl \
             git \
             gcompat \
@@ -129,13 +130,29 @@ jobs:
           # Create symlinks for clang runtime libs (PDFium expects different paths/versions)
           # Alpine has clang 21 at x86_64-alpine-linux-musl, PDFium expects clang 22 at x86_64-unknown-linux-gnu
           CLANG_VER=$(clang --version | head -1 | sed 's/.*version \([0-9]*\).*/\1/')
-          mkdir -p /usr/lib/clang/22/lib
           # Create symlink for the target triple PDFium expects
           if [ "${{ matrix.arch }}" = "amd64" ]; then
-            ln -sf /usr/lib/clang/${CLANG_VER}/lib/x86_64-alpine-linux-musl /usr/lib/clang/22/lib/x86_64-unknown-linux-gnu
+            ALPINE_TRIPLE="x86_64-alpine-linux-musl"
+            TARGET_TRIPLE="x86_64-unknown-linux-gnu"
+            ARCH_SUFFIX="x86_64"
           else
-            ln -sf /usr/lib/clang/${CLANG_VER}/lib/aarch64-alpine-linux-musl /usr/lib/clang/22/lib/aarch64-unknown-linux-gnu
+            ALPINE_TRIPLE="aarch64-alpine-linux-musl"
+            TARGET_TRIPLE="aarch64-unknown-linux-gnu"
+            ARCH_SUFFIX="aarch64"
           fi
+          mkdir -p /usr/lib/clang/22/lib/${TARGET_TRIPLE}
+          # Symlink all runtime libs and create aliases without arch suffix (PDFium expects both)
+          for f in /usr/lib/clang/${CLANG_VER}/lib/${ALPINE_TRIPLE}/*; do
+            if [ -f "$f" ]; then
+              fname=$(basename "$f")
+              ln -sf "$f" /usr/lib/clang/22/lib/${TARGET_TRIPLE}/${fname}
+              # Also create symlink without arch suffix (e.g., libclang_rt.builtins.a from libclang_rt.builtins-x86_64.a)
+              fname_no_arch=$(echo "$fname" | sed "s/-${ARCH_SUFFIX}//")
+              if [ "$fname" != "$fname_no_arch" ]; then
+                ln -sf "$f" /usr/lib/clang/22/lib/${TARGET_TRIPLE}/${fname_no_arch}
+              fi
+            fi
+          done
       # NOTE: Using manual git checkout because actions/checkout@v4 (JavaScript action)
       # doesn't work in Alpine containers on ARM64 runners
       - name: Checkout
