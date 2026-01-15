@@ -126,6 +126,16 @@ jobs:
           with open(socks_file, "w") as f:
               f.write("import socks as _socks\nfrom socks import *\nsocksocket = _socks.socksocket\nPROXY_TYPE_HTTP = _socks.HTTP\nPROXY_TYPE_HTTP_NO_TUNNEL = _socks.HTTP\nProxyError = _socks.ProxyError\n")
           '
+          # Create symlinks for clang runtime libs (PDFium expects different paths/versions)
+          # Alpine has clang 21 at x86_64-alpine-linux-musl, PDFium expects clang 22 at x86_64-unknown-linux-gnu
+          CLANG_VER=$(clang --version | head -1 | sed 's/.*version \([0-9]*\).*/\1/')
+          mkdir -p /usr/lib/clang/22/lib
+          # Create symlink for the target triple PDFium expects
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            ln -sf /usr/lib/clang/${CLANG_VER}/lib/x86_64-alpine-linux-musl /usr/lib/clang/22/lib/x86_64-unknown-linux-gnu
+          else
+            ln -sf /usr/lib/clang/${CLANG_VER}/lib/aarch64-alpine-linux-musl /usr/lib/clang/22/lib/aarch64-unknown-linux-gnu
+          fi
       # NOTE: Using manual git checkout because actions/checkout@v4 (JavaScript action)
       # doesn't work in Alpine containers on ARM64 runners
       - name: Checkout
