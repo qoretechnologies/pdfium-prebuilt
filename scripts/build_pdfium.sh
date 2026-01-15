@@ -172,7 +172,8 @@ if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     mkdir -p "${BUILD_DIR}"
     pushd "${BUILD_DIR}" >/dev/null
     gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git
-    gclient sync
+    # Disable RBE (Remote Build Execution) - the client isn't available for all platforms (e.g., ARM64)
+    gclient sync --custom-var="use_remoteexec=false"
     popd >/dev/null
 fi
 
@@ -193,12 +194,14 @@ GN_ARGS=(
 )
 
 # On Alpine/musl, use system clang instead of bundled one (which is glibc-based)
+# Also define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE for bundled libc++ to work with musl
 if [[ -f /etc/alpine-release ]]; then
     echo "-- configuring for Alpine: using system clang"
     GN_ARGS+=(
         "is_clang=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
+        "extra_cxxflags=\"-D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE\""
     )
 fi
 
