@@ -205,16 +205,15 @@ GN_ARGS=(
     "target_cpu=\"${TARGET_CPU}\""
 )
 
-# On Alpine/musl, use system clang instead of bundled one (which is glibc-based)
-# Enable musl-specific code paths and configuration
+# On Alpine/musl, use system clang and libc++ instead of bundled ones
+# (bundled libc++ doesn't support musl out of the box)
 if [[ -f /etc/alpine-release ]]; then
-    echo "-- configuring for Alpine (musl): using system clang"
+    echo "-- configuring for Alpine (musl): using system clang and libc++"
     GN_ARGS+=(
         "is_clang=true"
-        "is_musl=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
-        "use_safe_libstdcxx=false"
+        "use_custom_libcxx=false"
     )
 fi
 
