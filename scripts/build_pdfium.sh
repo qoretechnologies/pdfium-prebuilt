@@ -171,39 +171,38 @@ else
     GN_CMD="gn"
 fi
 
-# Create cipd wrapper by replacing the actual .cipd_client binary
+# Create CUSTOM_CIPD_CLIENT wrapper to skip unavailable packages (e.g., reclient for linux-arm64)
 # This is needed because custom_deps doesn't work for cipd dependencies
-# and CUSTOM_CIPD_CLIENT env var seems to be ignored by gclient
-# By wrapping .cipd_client directly, we intercept all cipd calls
+# CUSTOM_CIPD_CLIENT is checked BEFORE the version check in the cipd launcher,
+# so it won't be overwritten by self-updates
+echo "-- creating cipd wrapper to skip unavailable packages"
+CIPD_WRAPPER="${BUILD_DIR}/cipd_wrapper.sh"
 REAL_CIPD_CLIENT="${DEPOT_TOOLS_DIR}/.cipd_client"
-if [[ -x "${REAL_CIPD_CLIENT}" && ! -f "${DEPOT_TOOLS_DIR}/.cipd_client_real" ]]; then
-    echo "-- creating cipd wrapper to skip unavailable packages"
-    mv "${REAL_CIPD_CLIENT}" "${DEPOT_TOOLS_DIR}/.cipd_client_real"
-    cat > "${REAL_CIPD_CLIENT}" << 'WRAPPER'
+cat > "${CIPD_WRAPPER}" << WRAPPER
 #!/bin/bash
 # Wrapper to filter out unavailable cipd packages from ensure files
-# This replaces .cipd_client directly to intercept all cipd calls
+# Invoked via CUSTOM_CIPD_CLIENT before cipd's version check runs
 
-SCRIPT_DIR="$(dirname "$0")"
-REAL_CIPD="${SCRIPT_DIR}/.cipd_client_real"
+REAL_CIPD="${REAL_CIPD_CLIENT}"
 
-ARGS=("$@")
-for i in "${!ARGS[@]}"; do
-    if [[ "${ARGS[$i]}" == "-ensure-file" && -n "${ARGS[$((i+1))]}" ]]; then
-        ENSURE_FILE="${ARGS[$((i+1))]}"
+ARGS=("\$@")
+for i in "\${!ARGS[@]}"; do
+    if [[ "\${ARGS[\$i]}" == "-ensure-file" && -n "\${ARGS[\$((i+1))]}" ]]; then
+        ENSURE_FILE="\${ARGS[\$((i+1))]}"
         # Filter out linux-arm64 rbe/client package which doesn't exist
-        if grep -q "infra/rbe/client/linux-arm64" "$ENSURE_FILE" 2>/dev/null; then
-            FILTERED_FILE="${ENSURE_FILE}.filtered"
-            grep -v "infra/rbe/client/linux-arm64" "$ENSURE_FILE" > "$FILTERED_FILE"
-            ARGS[$((i+1))]="$FILTERED_FILE"
+        if grep -q "infra/rbe/client/linux-arm64" "\$ENSURE_FILE" 2>/dev/null; then
+            FILTERED_FILE="\${ENSURE_FILE}.filtered"
+            grep -v "infra/rbe/client/linux-arm64" "\$ENSURE_FILE" > "\$FILTERED_FILE"
+            ARGS[\$((i+1))]="\$FILTERED_FILE"
             echo "CIPD wrapper: Filtered unavailable package infra/rbe/client/linux-arm64" >&2
         fi
     fi
 done
-exec "${REAL_CIPD}" "${ARGS[@]}"
+exec "\${REAL_CIPD}" "\${ARGS[@]}"
 WRAPPER
-    chmod +x "${REAL_CIPD_CLIENT}"
-fi
+chmod +x "${CIPD_WRAPPER}"
+export CUSTOM_CIPD_CLIENT="${CIPD_WRAPPER}"
+echo "   CUSTOM_CIPD_CLIENT=${CUSTOM_CIPD_CLIENT}"
 
 if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
