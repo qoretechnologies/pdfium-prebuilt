@@ -194,12 +194,11 @@ GN_ARGS=(
 
 # On Alpine/musl, use system clang instead of bundled one (which is glibc-based)
 if [[ -f /etc/alpine-release ]]; then
-    echo "-- configuring for Alpine: using system clang and libc++"
+    echo "-- configuring for Alpine: using system clang"
     GN_ARGS+=(
         "is_clang=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
-        "use_custom_libcxx=false"
     )
 fi
 
