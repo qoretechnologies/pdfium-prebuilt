@@ -198,6 +198,12 @@ cd "${PDFIUM_SRC_DIR}"
 git fetch origin
 git checkout "${PDFIUM_REF}"
 
+# Sync dependencies for the checked out ref
+echo "-- syncing dependencies"
+cd "${BUILD_DIR}"
+gclient sync
+cd "${PDFIUM_SRC_DIR}"
+
 # Patch bundled libc++ for musl support on Alpine
 if [[ -f /etc/alpine-release ]]; then
     echo "-- patching libc++ for musl support"
