@@ -184,8 +184,8 @@ solutions = [
     "url": "https://pdfium.googlesource.com/pdfium.git",
     "managed": False,
     "custom_vars": {
+      "checkout_reclient": False,
       "download_remoteexec_cfg": False,
-      "reclient_version": "",
     },
   },
 ]
