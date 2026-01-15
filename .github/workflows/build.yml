@@ -23,6 +23,7 @@ jobs:
     container: public.ecr.aws/docker/library/ubuntu:24.04
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - arch: amd64
@@ -79,10 +80,12 @@ jobs:
           path: dist/*.tar.xz
 
   build-alpine:
+    needs: build-ubuntu
     runs-on: ${{ matrix.runner }}
     container: public.ecr.aws/docker/library/alpine:3.23
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - arch: amd64
