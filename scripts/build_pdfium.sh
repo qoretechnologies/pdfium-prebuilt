@@ -200,15 +200,16 @@ if [[ -f /etc/alpine-release ]]; then
     # Find and patch __locale file to add rune table support before the check
     LIBCXX_LOCALE="${PDFIUM_SRC_DIR}/third_party/libc++/src/include/__locale"
     if [[ -f "${LIBCXX_LOCALE}" ]]; then
-        # Add define before the #error check in __locale
-        sed -i 's/#  *error unknown rune table for this platform/#define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE\n\0/' "${LIBCXX_LOCALE}"
+        # Add define and comment out the #error check in __locale
+        # The define must be added AND the #error removed since the error is inside a preprocessor conditional
+        sed -i 's/#  *error unknown rune table for this platform.*/#define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE/' "${LIBCXX_LOCALE}"
         echo "   patched ${LIBCXX_LOCALE}"
     else
         echo "   warning: ${LIBCXX_LOCALE} not found"
         # Try alternative location
         LIBCXX_LOCALE="${PDFIUM_SRC_DIR}/buildtools/third_party/libc++/trunk/include/__locale"
         if [[ -f "${LIBCXX_LOCALE}" ]]; then
-            sed -i 's/#  *error unknown rune table for this platform/#define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE\n\0/' "${LIBCXX_LOCALE}"
+            sed -i 's/#  *error unknown rune table for this platform.*/#define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE/' "${LIBCXX_LOCALE}"
             echo "   patched ${LIBCXX_LOCALE} (alternative location)"
         else
             echo "   warning: libc++ locale file not found, listing available:"
