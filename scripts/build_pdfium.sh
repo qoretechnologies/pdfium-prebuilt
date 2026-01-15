@@ -175,7 +175,7 @@ if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
     mkdir -p "${BUILD_DIR}"
     pushd "${BUILD_DIR}" >/dev/null
-    # Create .gclient with custom_vars to disable RBE (Remote Build Execution)
+    # Create .gclient with custom_vars and custom_deps to disable RBE (Remote Build Execution)
     # which isn't available for all platforms (e.g., ARM64)
     cat > .gclient << 'GCLIENT'
 solutions = [
@@ -184,8 +184,10 @@ solutions = [
     "url": "https://pdfium.googlesource.com/pdfium.git",
     "managed": False,
     "custom_vars": {
-      "checkout_reclient": False,
       "download_remoteexec_cfg": False,
+    },
+    "custom_deps": {
+      "pdfium/buildtools/reclient": None,
     },
   },
 ]
