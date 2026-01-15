@@ -206,14 +206,15 @@ GN_ARGS=(
 )
 
 # On Alpine/musl, use system clang instead of bundled one (which is glibc-based)
-# Also define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE for bundled libc++ to work with musl
+# Enable musl-specific code paths and configuration
 if [[ -f /etc/alpine-release ]]; then
-    echo "-- configuring for Alpine: using system clang"
+    echo "-- configuring for Alpine (musl): using system clang"
     GN_ARGS+=(
         "is_clang=true"
+        "is_musl=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
-        "extra_cxxflags=\"-D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE\""
+        "use_safe_libstdcxx=false"
     )
 fi
 
