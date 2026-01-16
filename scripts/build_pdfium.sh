@@ -171,23 +171,30 @@ else
     GN_CMD="gn"
 fi
 
-# Create CUSTOM_CIPD_CLIENT wrapper to skip unavailable packages (e.g., reclient for linux-arm64)
-# This is needed because custom_deps doesn't work for cipd dependencies
-# CUSTOM_CIPD_CLIENT is checked BEFORE the version check in the cipd launcher,
-# so it won't be overwritten by self-updates
-echo "-- creating cipd wrapper to skip unavailable packages"
-CIPD_WRAPPER="${BUILD_DIR}/cipd_wrapper.sh"
+# Wrap the .cipd_client binary to filter out unavailable packages (e.g., reclient for linux-arm64)
+# gclient calls .cipd_client directly, not through the cipd launcher script, so we need to
+# rename the binary and replace it with a wrapper script
+echo "-- wrapping .cipd_client binary to filter unavailable packages"
+CIPD_CLIENT="${DEPOT_TOOLS_DIR}/.cipd_client"
+CIPD_CLIENT_REAL="${DEPOT_TOOLS_DIR}/.cipd_client.real"
 CIPD_LOG="${BUILD_DIR}/cipd_wrapper.log"
-REAL_CIPD_CLIENT="${DEPOT_TOOLS_DIR}/.cipd_client"
-cat > "${CIPD_WRAPPER}" << WRAPPER
+
+# Move the real binary if not already moved
+if [[ -f "${CIPD_CLIENT}" && ! -f "${CIPD_CLIENT_REAL}" ]]; then
+    mv "${CIPD_CLIENT}" "${CIPD_CLIENT_REAL}"
+    echo "   Moved ${CIPD_CLIENT} -> ${CIPD_CLIENT_REAL}"
+fi
+
+# Create wrapper script in place of .cipd_client
+cat > "${CIPD_CLIENT}" << WRAPPER
 #!/bin/bash
 # Wrapper to filter out unavailable cipd packages from ensure files
-# Invoked via CUSTOM_CIPD_CLIENT before cipd's version check runs
+# Replaces .cipd_client binary (which is now .cipd_client.real)
 
 # Log invocation for debugging
 echo "\$(date): cipd_wrapper called with args: \$@" >> "${CIPD_LOG}"
 
-REAL_CIPD="${REAL_CIPD_CLIENT}"
+REAL_CIPD="${CIPD_CLIENT_REAL}"
 
 ARGS=("\$@")
 for i in "\${!ARGS[@]}"; do
@@ -206,20 +213,10 @@ done
 echo "\$(date): calling \${REAL_CIPD} \${ARGS[@]}" >> "${CIPD_LOG}"
 exec "\${REAL_CIPD}" "\${ARGS[@]}"
 WRAPPER
-chmod +x "${CIPD_WRAPPER}"
-export CUSTOM_CIPD_CLIENT="${CIPD_WRAPPER}"
-echo "   CUSTOM_CIPD_CLIENT=${CUSTOM_CIPD_CLIENT}"
-echo "   Wrapper at: ${CIPD_WRAPPER}"
-echo "   Real cipd at: ${REAL_CIPD_CLIENT}"
-ls -la "${CIPD_WRAPPER}" || echo "   WARNING: Wrapper not found!"
-ls -la "${REAL_CIPD_CLIENT}" || echo "   WARNING: Real cipd not found!"
-echo "--- Wrapper script content ---"
-cat "${CIPD_WRAPPER}"
-echo "--- End wrapper script ---"
-# Verify CUSTOM_CIPD_CLIENT is in cipd launcher
-echo "--- Checking cipd launcher for CUSTOM_CIPD_CLIENT check ---"
-head -20 "${DEPOT_TOOLS_DIR}/cipd"
-echo "--- End cipd launcher check ---"
+chmod +x "${CIPD_CLIENT}"
+echo "   Wrapper at: ${CIPD_CLIENT}"
+echo "   Real binary at: ${CIPD_CLIENT_REAL}"
+ls -la "${CIPD_CLIENT}" "${CIPD_CLIENT_REAL}"
 
 if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
@@ -260,9 +257,6 @@ sed -i "/'buildtools\/reclient':/,/},$/d" "${PDFIUM_SRC_DIR}/DEPS"
 # Sync dependencies for the checked out ref
 echo "-- syncing dependencies"
 cd "${BUILD_DIR}"
-# Debug: verify CUSTOM_CIPD_CLIENT is set before gclient sync
-echo "   CUSTOM_CIPD_CLIENT before sync: ${CUSTOM_CIPD_CLIENT}"
-env | grep -i cipd || echo "   No CIPD env vars found"
 gclient sync
 cd "${PDFIUM_SRC_DIR}"
 
