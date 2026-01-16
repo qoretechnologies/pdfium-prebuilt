@@ -297,22 +297,21 @@ cd "${BUILD_DIR}"
 gclient sync --nohooks
 cd "${PDFIUM_SRC_DIR}"
 
-# On Alpine, copy six module into pdfium's bundled gsutil (gsutil ignores PYTHONPATH)
+# On Alpine, skip the test_fonts hook (gsutil has six module issues on musl)
+# We don't need test fonts for building the library - they're only for running PDFium's tests
 if [[ -f /etc/alpine-release ]]; then
-    PDFIUM_GSUTIL_DIR="${PDFIUM_SRC_DIR}/third_party/depot_tools/external_bin/gsutil"
-    if [[ -d "${PDFIUM_GSUTIL_DIR}" ]]; then
-        echo "-- copying six module into pdfium's gsutil bundled packages"
-        GSUTIL_VER_DIR=$(find "${PDFIUM_GSUTIL_DIR}" -maxdepth 1 -type d -name "gsutil_*" | head -1)
-        if [[ -n "${GSUTIL_VER_DIR}" ]]; then
-            SIX_PATH=$(python3 -c "import six; print(six.__file__)")
-            if [[ -f "${SIX_PATH}" ]]; then
-                cp "${SIX_PATH}" "${GSUTIL_VER_DIR}/gsutil/third_party/"
-                echo "   copied ${SIX_PATH} to ${GSUTIL_VER_DIR}/gsutil/third_party/"
-            fi
-        fi
-    else
-        echo "   pdfium gsutil dir not found at ${PDFIUM_GSUTIL_DIR} - skipping"
-    fi
+    echo "-- patching DEPS to skip test_fonts hook (gsutil incompatible with musl)"
+    python3 << PYTHON
+import re
+with open("${PDFIUM_SRC_DIR}/DEPS", "r") as f:
+    content = f.read()
+# Remove the test_fonts hook entry from the hooks list
+# Pattern matches the entire hook dict that contains 'test_fonts'
+content = re.sub(r"\s*\{\s*'name':\s*'test_fonts'[^}]*\},?\s*", "", content, flags=re.DOTALL)
+with open("${PDFIUM_SRC_DIR}/DEPS", "w") as f:
+    f.write(content)
+print("   removed test_fonts hook from DEPS")
+PYTHON
 fi
 
 # Patch build config to disable CREL on ARM64 (system clang 18 doesn't support it)
