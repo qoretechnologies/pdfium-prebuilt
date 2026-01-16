@@ -171,76 +171,74 @@ else
     GN_CMD="gn"
 fi
 
-# Patch the cipd launcher script directly to filter unavailable packages
-# This is the most reliable approach since we modify the actual script that runs
-echo "-- patching cipd launcher to filter unavailable packages"
-CIPD_LAUNCHER="${DEPOT_TOOLS_DIR}/cipd"
-CIPD_CLIENT="${DEPOT_TOOLS_DIR}/.cipd_client"
-CIPD_CLIENT_REAL="${DEPOT_TOOLS_DIR}/.cipd_client.real"
-CIPD_LOG="${BUILD_DIR}/cipd_wrapper.log"
+# Create a cipd wrapper directory that comes FIRST in PATH
+# This ensures our wrapper is called instead of depot_tools/cipd
+CIPD_WRAPPER_DIR="${BUILD_DIR}/cipd_wrapper_bin"
+mkdir -p "${CIPD_WRAPPER_DIR}"
+echo "-- creating cipd wrapper in ${CIPD_WRAPPER_DIR}"
 
-# Move the real binary if not already moved
-if [[ -f "${CIPD_CLIENT}" && ! -f "${CIPD_CLIENT_REAL}" ]]; then
-    mv "${CIPD_CLIENT}" "${CIPD_CLIENT_REAL}"
-    echo "   Moved ${CIPD_CLIENT} -> ${CIPD_CLIENT_REAL}"
+# The real cipd binary location
+CIPD_CLIENT="${DEPOT_TOOLS_DIR}/.cipd_client"
+
+# Create wrapper script that filters ensure files
+cat > "${CIPD_WRAPPER_DIR}/cipd" << WRAPPER
+#!/usr/bin/env bash
+# Wrapper that filters unavailable packages from cipd ensure files
+# This wrapper is placed in PATH before depot_tools
+
+echo "CIPD WRAPPER: called with: \$@" >&2
+
+REAL_CIPD="${CIPD_CLIENT}"
+
+# If real cipd doesn't exist, try depot_tools cipd launcher to bootstrap
+if [[ ! -x "\${REAL_CIPD}" ]]; then
+    echo "CIPD WRAPPER: bootstrapping via depot_tools" >&2
+    "${DEPOT_TOOLS_DIR}/cipd_bin_setup.sh" 2>&1 || true
 fi
 
-# Create a new cipd launcher that filters ensure files
-cat > "${CIPD_LAUNCHER}" << 'LAUNCHER'
-#!/usr/bin/env bash
-# Patched cipd launcher that filters unavailable packages
-
-set -e -o pipefail
-
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
-CIPD_CLIENT="${SCRIPT_DIR}/.cipd_client.real"
-
-# Filter function to remove unavailable packages from ensure files
+# Filter function
 filter_ensure_file() {
-    local ensure_file="$1"
-    if [[ -f "$ensure_file" ]] && grep -q "infra/rbe/client/linux-arm64" "$ensure_file" 2>/dev/null; then
-        local filtered="${ensure_file}.filtered"
-        grep -v "infra/rbe/client/linux-arm64" "$ensure_file" > "$filtered"
-        echo "CIPD: Filtered infra/rbe/client/linux-arm64 from $ensure_file" >&2
-        echo "$filtered"
+    local ensure_file="\$1"
+    if [[ -f "\$ensure_file" ]] && grep -q "infra/rbe/client/linux-arm64" "\$ensure_file" 2>/dev/null; then
+        local filtered="\${ensure_file}.filtered"
+        grep -v "infra/rbe/client/linux-arm64" "\$ensure_file" > "\$filtered"
+        echo "CIPD WRAPPER: Filtered infra/rbe/client/linux-arm64 from \$ensure_file" >&2
+        echo "\$filtered"
     else
-        echo "$ensure_file"
+        echo "\$ensure_file"
     fi
 }
 
-# Process arguments and filter ensure files
+# Process arguments
 ARGS=()
 skip_next=false
-for i in $(seq 1 $#); do
-    if $skip_next; then
+for arg in "\$@"; do
+    if \$skip_next; then
+        filtered=\$(filter_ensure_file "\$arg")
+        ARGS+=("\$filtered")
         skip_next=false
         continue
     fi
-    arg="${!i}"
-    next_i=$((i+1))
-    if [[ "$arg" == "-ensure-file" && $next_i -le $# ]]; then
-        ARGS+=("$arg")
-        next_arg="${!next_i}"
-        filtered=$(filter_ensure_file "$next_arg")
-        ARGS+=("$filtered")
+    if [[ "\$arg" == "-ensure-file" ]]; then
+        ARGS+=("\$arg")
         skip_next=true
     else
-        ARGS+=("$arg")
+        ARGS+=("\$arg")
     fi
 done
 
-# Download cipd client if needed (simplified from original)
-if [[ ! -x "${CIPD_CLIENT}" ]]; then
-    echo "ERROR: cipd client not found at ${CIPD_CLIENT}" >&2
-    exit 1
-fi
+echo "CIPD WRAPPER: running \${REAL_CIPD} \${ARGS[*]}" >&2
+exec "\${REAL_CIPD}" "\${ARGS[@]}"
+WRAPPER
+chmod +x "${CIPD_WRAPPER_DIR}/cipd"
+echo "   Created wrapper at: ${CIPD_WRAPPER_DIR}/cipd"
+cat "${CIPD_WRAPPER_DIR}/cipd"
+echo "--- end wrapper ---"
 
-exec "${CIPD_CLIENT}" "${ARGS[@]}"
-LAUNCHER
-chmod +x "${CIPD_LAUNCHER}"
-echo "   Patched cipd launcher at: ${CIPD_LAUNCHER}"
-echo "   Real binary at: ${CIPD_CLIENT_REAL}"
-ls -la "${CIPD_LAUNCHER}" "${CIPD_CLIENT_REAL}"
+# Prepend our wrapper directory to PATH
+export PATH="${CIPD_WRAPPER_DIR}:${PATH}"
+echo "   PATH now starts with: $(echo $PATH | cut -d: -f1-3)"
+which cipd
 
 if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
