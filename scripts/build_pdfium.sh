@@ -196,22 +196,19 @@ if [[ ! -x "\${REAL_CIPD}" ]]; then
     "${DEPOT_TOOLS_DIR}/cipd_bin_setup.sh" 2>&1 || true
 fi
 
-# Filter function
+# Filter function - removes reclient package which doesn't exist for arm64
 filter_ensure_file() {
     local ensure_file="\$1"
-    echo "CIPD WRAPPER: checking ensure file: \$ensure_file" >&2
     if [[ -f "\$ensure_file" ]]; then
-        echo "CIPD WRAPPER: ensure file exists, contents:" >&2
-        cat "\$ensure_file" >&2
-        if grep -q "infra/rbe/client/linux-arm64" "\$ensure_file"; then
+        # Filter lines containing infra/rbe/client (the reclient package)
+        if grep -q "infra/rbe/client" "\$ensure_file"; then
             local filtered="\${ensure_file}.filtered"
-            grep -v "infra/rbe/client/linux-arm64" "\$ensure_file" > "\$filtered"
-            echo "CIPD WRAPPER: Filtered infra/rbe/client/linux-arm64" >&2
+            # Remove the @Subdir line for reclient and the package line
+            grep -v -E "(buildtools/reclient|infra/rbe/client)" "\$ensure_file" > "\$filtered"
+            echo "CIPD WRAPPER: Filtered reclient package from \$ensure_file" >&2
             echo "\$filtered"
             return
         fi
-    else
-        echo "CIPD WRAPPER: ensure file does not exist!" >&2
     fi
     echo "\$ensure_file"
 }
