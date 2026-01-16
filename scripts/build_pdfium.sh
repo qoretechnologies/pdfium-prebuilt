@@ -171,13 +171,15 @@ else
     GN_CMD="gn"
 fi
 
-# Wrap the .cipd_client binary to filter out unavailable packages (e.g., reclient for linux-arm64)
-# gclient calls .cipd_client directly, not through the cipd launcher script, so we need to
-# rename the binary and replace it with a wrapper script
-echo "-- wrapping .cipd_client binary to filter unavailable packages"
+# Create a cipd wrapper to filter out unavailable packages (e.g., reclient for linux-arm64)
+# We need BOTH approaches since gclient might call either:
+# 1. The cipd launcher script (which checks CUSTOM_CIPD_CLIENT)
+# 2. The .cipd_client binary directly
+echo "-- creating cipd wrapper to filter unavailable packages"
+CIPD_WRAPPER="${BUILD_DIR}/cipd_wrapper.sh"
+CIPD_LOG="${BUILD_DIR}/cipd_wrapper.log"
 CIPD_CLIENT="${DEPOT_TOOLS_DIR}/.cipd_client"
 CIPD_CLIENT_REAL="${DEPOT_TOOLS_DIR}/.cipd_client.real"
-CIPD_LOG="${BUILD_DIR}/cipd_wrapper.log"
 
 # Move the real binary if not already moved
 if [[ -f "${CIPD_CLIENT}" && ! -f "${CIPD_CLIENT_REAL}" ]]; then
@@ -185,11 +187,10 @@ if [[ -f "${CIPD_CLIENT}" && ! -f "${CIPD_CLIENT_REAL}" ]]; then
     echo "   Moved ${CIPD_CLIENT} -> ${CIPD_CLIENT_REAL}"
 fi
 
-# Create wrapper script in place of .cipd_client
-cat > "${CIPD_CLIENT}" << WRAPPER
+# Create wrapper script
+cat > "${CIPD_WRAPPER}" << WRAPPER
 #!/bin/bash
 # Wrapper to filter out unavailable cipd packages from ensure files
-# Replaces .cipd_client binary (which is now .cipd_client.real)
 
 # Log invocation for debugging
 echo "\$(date): cipd_wrapper called with args: \$@" >> "${CIPD_LOG}"
@@ -213,10 +214,18 @@ done
 echo "\$(date): calling \${REAL_CIPD} \${ARGS[@]}" >> "${CIPD_LOG}"
 exec "\${REAL_CIPD}" "\${ARGS[@]}"
 WRAPPER
+chmod +x "${CIPD_WRAPPER}"
+
+# Set CUSTOM_CIPD_CLIENT so the cipd launcher uses our wrapper
+export CUSTOM_CIPD_CLIENT="${CIPD_WRAPPER}"
+echo "   CUSTOM_CIPD_CLIENT=${CUSTOM_CIPD_CLIENT}"
+
+# Also create a wrapper at .cipd_client location for direct binary invocations
+cp "${CIPD_WRAPPER}" "${CIPD_CLIENT}"
 chmod +x "${CIPD_CLIENT}"
-echo "   Wrapper at: ${CIPD_CLIENT}"
+echo "   Wrapper also at: ${CIPD_CLIENT}"
 echo "   Real binary at: ${CIPD_CLIENT_REAL}"
-ls -la "${CIPD_CLIENT}" "${CIPD_CLIENT_REAL}"
+ls -la "${CIPD_WRAPPER}" "${CIPD_CLIENT}" "${CIPD_CLIENT_REAL}"
 
 if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
