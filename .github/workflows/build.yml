@@ -62,6 +62,7 @@ jobs:
             build-essential
       - name: Setup clang runtime symlinks (ARM64)
         if: matrix.arch == 'arm64'
+        shell: bash
         run: |
           # PDFium build expects clang runtime libraries at specific paths
           # that differ from Ubuntu's default layout
