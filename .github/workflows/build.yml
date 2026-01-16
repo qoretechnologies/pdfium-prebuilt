@@ -54,6 +54,7 @@ jobs:
             generate-ninja \
             git \
             libglib2.0-dev \
+            lld \
             ninja-build \
             pkg-config \
             python3 \
