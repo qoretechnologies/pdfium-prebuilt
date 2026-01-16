@@ -291,11 +291,29 @@ git checkout "${PDFIUM_REF}"
 echo "-- patching DEPS to remove reclient dependency"
 sed -i "/'buildtools\/reclient':/,/},$/d" "${PDFIUM_SRC_DIR}/DEPS"
 
-# Sync dependencies for the checked out ref
+# Sync dependencies for the checked out ref (without hooks - we'll run them after patching)
 echo "-- syncing dependencies"
 cd "${BUILD_DIR}"
-gclient sync
+gclient sync --nohooks
 cd "${PDFIUM_SRC_DIR}"
+
+# On Alpine, copy six module into pdfium's bundled gsutil (gsutil ignores PYTHONPATH)
+if [[ -f /etc/alpine-release ]]; then
+    PDFIUM_GSUTIL_DIR="${PDFIUM_SRC_DIR}/third_party/depot_tools/external_bin/gsutil"
+    if [[ -d "${PDFIUM_GSUTIL_DIR}" ]]; then
+        echo "-- copying six module into pdfium's gsutil bundled packages"
+        GSUTIL_VER_DIR=$(find "${PDFIUM_GSUTIL_DIR}" -maxdepth 1 -type d -name "gsutil_*" | head -1)
+        if [[ -n "${GSUTIL_VER_DIR}" ]]; then
+            SIX_PATH=$(python3 -c "import six; print(six.__file__)")
+            if [[ -f "${SIX_PATH}" ]]; then
+                cp "${SIX_PATH}" "${GSUTIL_VER_DIR}/gsutil/third_party/"
+                echo "   copied ${SIX_PATH} to ${GSUTIL_VER_DIR}/gsutil/third_party/"
+            fi
+        fi
+    else
+        echo "   pdfium gsutil dir not found at ${PDFIUM_GSUTIL_DIR} - skipping"
+    fi
+fi
 
 # Patch build config to disable CREL on ARM64 (system clang 18 doesn't support it)
 # The CREL flags are added by Chromium's build config based on bundled clang version,
@@ -343,6 +361,12 @@ if [[ -f /etc/alpine-release ]]; then
         fi
     fi
 fi
+
+# Now run hooks (after all patching is done)
+echo "-- running gclient hooks"
+cd "${BUILD_DIR}"
+gclient runhooks
+cd "${PDFIUM_SRC_DIR}"
 
 GN_ARGS=(
     "is_debug=false"
