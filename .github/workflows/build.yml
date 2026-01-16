@@ -159,6 +159,7 @@ jobs:
             ninja \
             pkgconf \
             py3-pip \
+            py3-six \
             python3 \
             tar \
             wget \
