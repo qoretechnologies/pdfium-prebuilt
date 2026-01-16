@@ -290,6 +290,21 @@ cd "${BUILD_DIR}"
 gclient sync
 cd "${PDFIUM_SRC_DIR}"
 
+# Patch build config to disable CREL on ARM64 (system clang 18 doesn't support it)
+# The CREL flags are added by Chromium's build config based on bundled clang version,
+# but when using system clang we need to disable them
+if [[ "${HOST_ARCH}" == "aarch64" ]]; then
+    echo "-- patching build config to disable CREL for system clang"
+    COMPILER_GN="${PDFIUM_SRC_DIR}/build/config/compiler/BUILD.gn"
+    if [[ -f "${COMPILER_GN}" ]]; then
+        # Comment out the CREL-related assembler flags
+        sed -i 's/"-Wa,--crel,--allow-experimental-crel",/# Disabled for system clang: "-Wa,--crel,--allow-experimental-crel",/' "${COMPILER_GN}"
+        echo "   patched ${COMPILER_GN}"
+    else
+        echo "   warning: ${COMPILER_GN} not found"
+    fi
+fi
+
 # Patch bundled libc++ for musl support on Alpine
 if [[ -f /etc/alpine-release ]]; then
     echo "-- patching libc++ for musl support"
@@ -339,7 +354,6 @@ elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
         "is_clang=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
-        "use_crel=false"
     )
 fi
 
