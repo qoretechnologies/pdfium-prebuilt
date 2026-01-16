@@ -298,8 +298,16 @@ if [[ "${HOST_ARCH}" == "aarch64" ]]; then
     COMPILER_GN="${PDFIUM_SRC_DIR}/build/config/compiler/BUILD.gn"
     if [[ -f "${COMPILER_GN}" ]]; then
         # Comment out the CREL-related assembler flags
-        sed -i 's/"-Wa,--crel,--allow-experimental-crel",/# Disabled for system clang: "-Wa,--crel,--allow-experimental-crel",/' "${COMPILER_GN}"
+        # The line format is: cflags += [ "-Wa,--crel,--allow-experimental-crel" ]
+        sed -i 's/cflags += \[ "-Wa,--crel,--allow-experimental-crel" \]/# Disabled for system clang: cflags += [ "-Wa,--crel,--allow-experimental-crel" ]/' "${COMPILER_GN}"
         echo "   patched ${COMPILER_GN}"
+        # Verify the patch was applied
+        if grep -q "# Disabled for system clang" "${COMPILER_GN}"; then
+            echo "   patch verified"
+        else
+            echo "   warning: patch may not have been applied correctly"
+            grep -n "crel" "${COMPILER_GN}" || echo "   no crel references found"
+        fi
     else
         echo "   warning: ${COMPILER_GN} not found"
     fi
