@@ -51,6 +51,7 @@ jobs:
           apt-get install -y \
             clang \
             curl \
+            generate-ninja \
             git \
             libglib2.0-dev \
             ninja-build \

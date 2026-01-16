@@ -159,11 +159,15 @@ fi
 
 export PATH="${DEPOT_TOOLS_DIR}:${PATH}"
 
-# Use system gn on Alpine (it's new enough and depot_tools gn doesn't work on musl)
-# On Ubuntu, use depot_tools gn (system gn is too old, missing path_exists function)
+# Use system gn on Alpine (musl compatibility) or ARM64 (depot_tools downloads x86_64 binaries)
+# On Ubuntu x86_64, use depot_tools gn (system gn is too old, missing path_exists function)
+HOST_ARCH=$(uname -m)
 if [[ -f /etc/alpine-release && -x /usr/bin/gn ]]; then
     GN_CMD="/usr/bin/gn"
-    echo "-- using system gn: ${GN_CMD}"
+    echo "-- using system gn (Alpine): ${GN_CMD}"
+elif [[ "${HOST_ARCH}" == "aarch64" && -x /usr/bin/gn ]]; then
+    GN_CMD="/usr/bin/gn"
+    echo "-- using system gn (ARM64): ${GN_CMD}"
 else
     # Bootstrap depot_tools to ensure gn is available
     echo "-- bootstrapping depot_tools gn"
