@@ -213,6 +213,13 @@ echo "   Wrapper at: ${CIPD_WRAPPER}"
 echo "   Real cipd at: ${REAL_CIPD_CLIENT}"
 ls -la "${CIPD_WRAPPER}" || echo "   WARNING: Wrapper not found!"
 ls -la "${REAL_CIPD_CLIENT}" || echo "   WARNING: Real cipd not found!"
+echo "--- Wrapper script content ---"
+cat "${CIPD_WRAPPER}"
+echo "--- End wrapper script ---"
+# Verify CUSTOM_CIPD_CLIENT is in cipd launcher
+echo "--- Checking cipd launcher for CUSTOM_CIPD_CLIENT check ---"
+head -20 "${DEPOT_TOOLS_DIR}/cipd"
+echo "--- End cipd launcher check ---"
 
 if [[ ! -d "${PDFIUM_SRC_DIR}" ]]; then
     echo "-- fetching pdfium source"
@@ -253,6 +260,9 @@ sed -i "/'buildtools\/reclient':/,/},$/d" "${PDFIUM_SRC_DIR}/DEPS"
 # Sync dependencies for the checked out ref
 echo "-- syncing dependencies"
 cd "${BUILD_DIR}"
+# Debug: verify CUSTOM_CIPD_CLIENT is set before gclient sync
+echo "   CUSTOM_CIPD_CLIENT before sync: ${CUSTOM_CIPD_CLIENT}"
+env | grep -i cipd || echo "   No CIPD env vars found"
 gclient sync
 cd "${PDFIUM_SRC_DIR}"
 
