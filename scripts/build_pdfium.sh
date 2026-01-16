@@ -159,6 +159,13 @@ fi
 
 export PATH="${DEPOT_TOOLS_DIR}:${PATH}"
 
+# On Alpine, export PYTHONPATH so bundled tools (gsutil) can find system packages like 'six'
+if [[ -f /etc/alpine-release ]]; then
+    SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
+    export PYTHONPATH="${SITE_PACKAGES}:${PYTHONPATH:-}"
+    echo "-- setting PYTHONPATH for Alpine: ${PYTHONPATH}"
+fi
+
 # Use system gn on Alpine (musl compatibility) or ARM64 (depot_tools downloads x86_64 binaries)
 # On Ubuntu x86_64, use depot_tools gn (system gn is too old, missing path_exists function)
 HOST_ARCH=$(uname -m)
