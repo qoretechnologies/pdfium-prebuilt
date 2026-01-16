@@ -325,9 +325,16 @@ GN_ARGS=(
     "target_cpu=\"${TARGET_CPU}\""
 )
 
-# On Alpine/musl, use system clang and patch bundled libc++ headers for musl
+# On Alpine (musl compatibility) or ARM64 (bundled clang is x86_64), use system clang
 if [[ -f /etc/alpine-release ]]; then
-    echo "-- configuring for Alpine (musl): using system clang with patched libc++"
+    echo "-- configuring for Alpine (musl): using system clang"
+    GN_ARGS+=(
+        "is_clang=true"
+        "clang_base_path=\"/usr\""
+        "clang_use_chrome_plugins=false"
+    )
+elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
+    echo "-- configuring for ARM64: using system clang"
     GN_ARGS+=(
         "is_clang=true"
         "clang_base_path=\"/usr\""
