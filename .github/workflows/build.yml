@@ -166,8 +166,8 @@ jobs:
             xz \
             build-base \
             linux-headers
-          # Install Python deps for depot_tools (gclient)
-          pip3 install httplib2 PySocks --break-system-packages -q
+          # Install Python deps for depot_tools (gclient, gsutil)
+          pip3 install httplib2 PySocks six --break-system-packages -q
           # Create httplib2.socks shim (depot_tools expects this submodule)
           python3 -c '
           import httplib2, os
