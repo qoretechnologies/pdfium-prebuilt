@@ -339,6 +339,7 @@ elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
         "is_clang=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
+        "use_crel=false"
     )
 fi
 
