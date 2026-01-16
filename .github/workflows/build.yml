@@ -60,6 +60,45 @@ jobs:
             tar \
             xz-utils \
             build-essential
+      - name: Setup clang runtime symlinks (ARM64)
+        if: matrix.arch == 'arm64'
+        run: |
+          # PDFium build expects clang runtime libraries at specific paths
+          # that differ from Ubuntu's default layout
+          CLANG_VER=$(clang --version | head -1 | sed 's/.*version \([0-9]*\).*/\1/')
+          echo "Detected clang version: ${CLANG_VER}"
+
+          # Find where Ubuntu has the clang runtime libs
+          # Ubuntu 24.04 uses /usr/lib/llvm-<ver>/lib/clang/<ver>/lib/linux/
+          UBUNTU_RT_PATH="/usr/lib/llvm-${CLANG_VER}/lib/clang/${CLANG_VER}/lib/linux"
+          if [[ ! -d "${UBUNTU_RT_PATH}" ]]; then
+            # Try /usr/lib/clang/<ver>/lib/linux as fallback
+            UBUNTU_RT_PATH="/usr/lib/clang/${CLANG_VER}/lib/linux"
+          fi
+          echo "Ubuntu runtime path: ${UBUNTU_RT_PATH}"
+          ls -la "${UBUNTU_RT_PATH}" || echo "Warning: runtime path not found"
+
+          # PDFium expects libs at /usr/lib/clang/21/lib/aarch64-unknown-linux-gnu/
+          # (it uses the version from its bundled clang, not system clang)
+          # We need to symlink to where the system clang has its runtime libs
+          TARGET_DIR="/usr/lib/clang/21/lib/aarch64-unknown-linux-gnu"
+          mkdir -p "${TARGET_DIR}"
+
+          # Symlink runtime libraries
+          for f in "${UBUNTU_RT_PATH}"/libclang_rt.*-aarch64*; do
+            if [[ -f "$f" ]]; then
+              fname=$(basename "$f")
+              ln -sf "$f" "${TARGET_DIR}/${fname}"
+              # Also create symlink without arch suffix
+              fname_no_arch=$(echo "$fname" | sed 's/-aarch64//')
+              if [[ "$fname" != "$fname_no_arch" ]]; then
+                ln -sf "$f" "${TARGET_DIR}/${fname_no_arch}"
+              fi
+            fi
+          done
+
+          echo "Created symlinks in ${TARGET_DIR}:"
+          ls -la "${TARGET_DIR}"
       - name: Build PDFium
         run: |
           ./scripts/build_pdfium.sh \
