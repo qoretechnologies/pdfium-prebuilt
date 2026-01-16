@@ -55,6 +55,7 @@ jobs:
             git \
             libglib2.0-dev \
             lld \
+            llvm \
             ninja-build \
             pkg-config \
             python3 \
