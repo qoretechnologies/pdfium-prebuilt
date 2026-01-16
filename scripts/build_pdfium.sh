@@ -199,14 +199,21 @@ fi
 # Filter function
 filter_ensure_file() {
     local ensure_file="\$1"
-    if [[ -f "\$ensure_file" ]] && grep -q "infra/rbe/client/linux-arm64" "\$ensure_file" 2>/dev/null; then
-        local filtered="\${ensure_file}.filtered"
-        grep -v "infra/rbe/client/linux-arm64" "\$ensure_file" > "\$filtered"
-        echo "CIPD WRAPPER: Filtered infra/rbe/client/linux-arm64 from \$ensure_file" >&2
-        echo "\$filtered"
+    echo "CIPD WRAPPER: checking ensure file: \$ensure_file" >&2
+    if [[ -f "\$ensure_file" ]]; then
+        echo "CIPD WRAPPER: ensure file exists, contents:" >&2
+        cat "\$ensure_file" >&2
+        if grep -q "infra/rbe/client/linux-arm64" "\$ensure_file"; then
+            local filtered="\${ensure_file}.filtered"
+            grep -v "infra/rbe/client/linux-arm64" "\$ensure_file" > "\$filtered"
+            echo "CIPD WRAPPER: Filtered infra/rbe/client/linux-arm64" >&2
+            echo "\$filtered"
+            return
+        fi
     else
-        echo "\$ensure_file"
+        echo "CIPD WRAPPER: ensure file does not exist!" >&2
     fi
+    echo "\$ensure_file"
 }
 
 # Process arguments
