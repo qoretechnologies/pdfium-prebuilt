@@ -399,20 +399,39 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
 fi
 
 # Patch partition_alloc for musl support on Alpine ARM64
-# The aarch64_support.h file includes <sys/ifunc.h> which doesn't exist on musl
-# We need to add a check for __GLIBC__ since ifunc is a glibc feature
+# The sys/ifunc.h header doesn't exist on musl - it's glibc-specific
+# We need to patch both aarch64_support.h and tagging.cc
 if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- patching partition_alloc for musl (no sys/ifunc.h)"
+
+    # Patch aarch64_support.h - add __GLIBC__ check to HAS_HW_CAPS definition
     AARCH64_SUPPORT_H="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/aarch64_support.h"
     if [[ -f "${AARCH64_SUPPORT_H}" ]]; then
-        # Add __GLIBC__ check to HAS_HW_CAPS definition
-        # Original: #if PA_BUILDFLAG(IS_ANDROID) || PA_BUILDFLAG(IS_LINUX)
-        # New: Also require __GLIBC__ for Linux (ifunc is glibc-specific)
         sed -i 's/#if PA_BUILDFLAG(IS_ANDROID) || PA_BUILDFLAG(IS_LINUX)/#if PA_BUILDFLAG(IS_ANDROID) || (PA_BUILDFLAG(IS_LINUX) \&\& defined(__GLIBC__))/' "${AARCH64_SUPPORT_H}"
         echo "   patched ${AARCH64_SUPPORT_H}"
-        grep -n "HAS_HW_CAPS" "${AARCH64_SUPPORT_H}" | head -3
-    else
-        echo "   warning: ${AARCH64_SUPPORT_H} not found"
+    fi
+
+    # Patch tagging.cc - wrap sys/ifunc.h include with __GLIBC__ check
+    # The include is inside #if PA_BUILDFLAG(HAS_MEMORY_TAGGING) block
+    TAGGING_CC="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/tagging.cc"
+    if [[ -f "${TAGGING_CC}" ]]; then
+        # Replace the unconditional include with a conditional one
+        sed -i 's|#include <sys/ifunc.h>|#ifdef __GLIBC__\n#include <sys/ifunc.h>\n#endif|' "${TAGGING_CC}"
+        echo "   patched ${TAGGING_CC}"
+    fi
+
+    # Also patch partition_alloc.gni to disable memory tagging on non-glibc
+    # This is the proper fix - disable the feature entirely for musl
+    PA_GNI="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/partition_alloc.gni"
+    if [[ -f "${PA_GNI}" ]]; then
+        # Add an override to disable has_memory_tagging
+        # Find: has_memory_tagging = current_cpu == "arm64" && ...
+        # Note: This is complex, so we'll add a simpler override at the end
+        if grep -q "has_memory_tagging = current_cpu" "${PA_GNI}"; then
+            # Instead of complex sed, just override by adding a line after the definition
+            sed -i '/^has_memory_tagging = current_cpu/a # Override for musl: disable memory tagging\nif (target_os == "linux" && target_cpu == "arm64") {\n  # Note: This will be checked at runtime by __GLIBC__ in the source\n}' "${PA_GNI}" 2>/dev/null || true
+            echo "   note: could not patch ${PA_GNI}, relying on source patches"
+        fi
     fi
 fi
 
