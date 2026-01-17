@@ -314,10 +314,10 @@ print("   removed test_fonts hook from DEPS")
 PYTHON
 fi
 
-# Patch build config to disable CREL on ARM64 (system clang 18 doesn't support it)
+# Patch build config to disable CREL when using system clang (ARM64 or Alpine)
 # The CREL flags are added by Chromium's build config based on bundled clang version,
-# but when using system clang we need to disable them
-if [[ "${HOST_ARCH}" == "aarch64" ]]; then
+# but system clang (18-21) doesn't support the experimental --crel flag
+if [[ "${HOST_ARCH}" == "aarch64" || -f /etc/alpine-release ]]; then
     echo "-- patching build config to disable CREL for system clang"
     COMPILER_GN="${PDFIUM_SRC_DIR}/build/config/compiler/BUILD.gn"
     if [[ -f "${COMPILER_GN}" ]]; then
@@ -386,6 +386,7 @@ if [[ -f /etc/alpine-release ]]; then
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
         "use_custom_libcxx=false"
+        "use_allocator_shim=false"
     )
 elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- configuring for ARM64: using system clang"
