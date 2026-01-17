@@ -363,11 +363,27 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
         fi
     fi
 
-    # Also patch build/config/compiler/BUILD.gn for any target triple references
+    # Patch build/config/compiler/BUILD.gn - this is the CRITICAL file
+    # Lines ~1326-1327 contain: cflags += [ "--target=aarch64-linux-gnu" ]
     COMPILER_GN="${PDFIUM_SRC_DIR}/build/config/compiler/BUILD.gn"
-    if [[ -f "${COMPILER_GN}" ]] && grep -q "aarch64-linux-gnu" "${COMPILER_GN}"; then
+    echo "   checking ${COMPILER_GN} for target triple..."
+    if [[ -f "${COMPILER_GN}" ]]; then
+        # Show what we're looking for
+        echo "   current aarch64 references in compiler/BUILD.gn:"
+        grep -n "aarch64" "${COMPILER_GN}" | head -5 || echo "   (none found)"
+        # Apply the patch
         sed -i 's/aarch64-linux-gnu/aarch64-alpine-linux-musl/g' "${COMPILER_GN}"
-        echo "   patched ${COMPILER_GN}"
+        echo "   applied sed substitution to ${COMPILER_GN}"
+        # Verify
+        if grep -q "aarch64-alpine-linux-musl" "${COMPILER_GN}"; then
+            echo "   verified: aarch64-alpine-linux-musl now in compiler/BUILD.gn"
+            grep -n "aarch64-alpine-linux-musl" "${COMPILER_GN}" | head -3
+        else
+            echo "   WARNING: patch may not have been applied - checking content:"
+            grep -n "aarch64" "${COMPILER_GN}" | head -5 || echo "   (no aarch64 references)"
+        fi
+    else
+        echo "   WARNING: ${COMPILER_GN} not found!"
     fi
 
     # Search for any remaining references to aarch64-linux-gnu in the build directory
