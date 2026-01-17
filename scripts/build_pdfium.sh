@@ -380,11 +380,12 @@ GN_ARGS=(
 
 # On Alpine (musl compatibility) or ARM64 (bundled clang is x86_64), use system clang
 if [[ -f /etc/alpine-release ]]; then
-    echo "-- configuring for Alpine (musl): using system clang"
+    echo "-- configuring for Alpine (musl): using system clang and libc++"
     GN_ARGS+=(
         "is_clang=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
+        "use_custom_libcxx=false"
     )
 elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- configuring for ARM64: using system clang"
