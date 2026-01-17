@@ -337,21 +337,47 @@ if [[ "${HOST_ARCH}" == "aarch64" || -f /etc/alpine-release ]]; then
     fi
 fi
 
-# On Alpine ARM64, patch toolchain to use correct musl target triple
+# On Alpine ARM64, patch toolchain files to use correct musl target triple
 # PDFium's arm64 toolchain uses --target=aarch64-linux-gnu which is wrong for musl
+# We need to patch both the toolchain definition AND the template file
 if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- patching arm64 toolchain for musl target triple"
+
+    # Patch the gcc_toolchain.gni template (where target triple is computed)
+    TOOLCHAIN_GNI="${PDFIUM_SRC_DIR}/build/toolchain/gcc_toolchain.gni"
+    if [[ -f "${TOOLCHAIN_GNI}" ]]; then
+        sed -i 's/aarch64-linux-gnu/aarch64-alpine-linux-musl/g' "${TOOLCHAIN_GNI}"
+        echo "   patched ${TOOLCHAIN_GNI}"
+        if grep -q "aarch64-alpine-linux-musl" "${TOOLCHAIN_GNI}"; then
+            echo "   verified aarch64-alpine-linux-musl in gcc_toolchain.gni"
+        fi
+    fi
+
+    # Patch the Linux toolchain BUILD.gn
     TOOLCHAIN_GN="${PDFIUM_SRC_DIR}/build/toolchain/linux/BUILD.gn"
     if [[ -f "${TOOLCHAIN_GN}" ]]; then
-        # Replace aarch64-linux-gnu with aarch64-alpine-linux-musl
         sed -i 's/aarch64-linux-gnu/aarch64-alpine-linux-musl/g' "${TOOLCHAIN_GN}"
         echo "   patched ${TOOLCHAIN_GN}"
-        # Verify
         if grep -q "aarch64-alpine-linux-musl" "${TOOLCHAIN_GN}"; then
-            echo "   patch verified"
+            echo "   verified aarch64-alpine-linux-musl in linux/BUILD.gn"
         fi
+    fi
+
+    # Also patch build/config/compiler/BUILD.gn for any target triple references
+    COMPILER_GN="${PDFIUM_SRC_DIR}/build/config/compiler/BUILD.gn"
+    if [[ -f "${COMPILER_GN}" ]] && grep -q "aarch64-linux-gnu" "${COMPILER_GN}"; then
+        sed -i 's/aarch64-linux-gnu/aarch64-alpine-linux-musl/g' "${COMPILER_GN}"
+        echo "   patched ${COMPILER_GN}"
+    fi
+
+    # Search for any remaining references to aarch64-linux-gnu in the build directory
+    echo "   checking for remaining aarch64-linux-gnu references..."
+    REMAINING=$(grep -r "aarch64-linux-gnu" "${PDFIUM_SRC_DIR}/build" --include="*.gn" --include="*.gni" 2>/dev/null | head -5)
+    if [[ -n "${REMAINING}" ]]; then
+        echo "   warning: remaining references found:"
+        echo "${REMAINING}"
     else
-        echo "   warning: ${TOOLCHAIN_GN} not found"
+        echo "   no remaining references found"
     fi
 fi
 
@@ -411,16 +437,6 @@ if [[ -f /etc/alpine-release ]]; then
         "use_custom_libcxx=false"
         "use_allocator_shim=false"
     )
-    # On Alpine ARM64, override the target triple that the arm64 toolchain adds
-    # The toolchain uses --target=aarch64-linux-gnu which is wrong for musl
-    if [[ "${HOST_ARCH}" == "aarch64" ]]; then
-        echo "-- adding musl target triple override for ARM64"
-        GN_ARGS+=(
-            "extra_cflags=\"--target=aarch64-alpine-linux-musl -stdlib=libc++\""
-            "extra_cxxflags=\"--target=aarch64-alpine-linux-musl -stdlib=libc++\""
-            "extra_ldflags=\"--target=aarch64-alpine-linux-musl -stdlib=libc++ -fuse-ld=lld\""
-        )
-    fi
 elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- configuring for ARM64: using system clang"
     GN_ARGS+=(
