@@ -387,10 +387,11 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     fi
 
     # Search for any remaining references to aarch64-linux-gnu in the build directory
+    # Use find+xargs instead of grep --include (BusyBox grep doesn't support --include)
     echo "   checking for remaining aarch64-linux-gnu references..."
-    REMAINING=$(grep -r "aarch64-linux-gnu" "${PDFIUM_SRC_DIR}/build" --include="*.gn" --include="*.gni" 2>/dev/null | head -5)
+    REMAINING=$(find "${PDFIUM_SRC_DIR}/build" \( -name "*.gn" -o -name "*.gni" \) -exec grep -l "aarch64-linux-gnu" {} \; 2>/dev/null | head -5) || true
     if [[ -n "${REMAINING}" ]]; then
-        echo "   warning: remaining references found:"
+        echo "   warning: remaining references found in:"
         echo "${REMAINING}"
     else
         echo "   no remaining references found"
