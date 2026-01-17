@@ -411,6 +411,16 @@ if [[ -f /etc/alpine-release ]]; then
         "use_custom_libcxx=false"
         "use_allocator_shim=false"
     )
+    # On Alpine ARM64, override the target triple that the arm64 toolchain adds
+    # The toolchain uses --target=aarch64-linux-gnu which is wrong for musl
+    if [[ "${HOST_ARCH}" == "aarch64" ]]; then
+        echo "-- adding musl target triple override for ARM64"
+        GN_ARGS+=(
+            "extra_cflags=\"--target=aarch64-alpine-linux-musl -stdlib=libc++\""
+            "extra_cxxflags=\"--target=aarch64-alpine-linux-musl -stdlib=libc++\""
+            "extra_ldflags=\"--target=aarch64-alpine-linux-musl -stdlib=libc++ -fuse-ld=lld\""
+        )
+    fi
 elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- configuring for ARM64: using system clang"
     GN_ARGS+=(
