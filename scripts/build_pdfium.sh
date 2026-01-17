@@ -398,6 +398,24 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     fi
 fi
 
+# Patch partition_alloc for musl support on Alpine ARM64
+# The aarch64_support.h file includes <sys/ifunc.h> which doesn't exist on musl
+# We need to add a check for __GLIBC__ since ifunc is a glibc feature
+if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
+    echo "-- patching partition_alloc for musl (no sys/ifunc.h)"
+    AARCH64_SUPPORT_H="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/aarch64_support.h"
+    if [[ -f "${AARCH64_SUPPORT_H}" ]]; then
+        # Add __GLIBC__ check to HAS_HW_CAPS definition
+        # Original: #if PA_BUILDFLAG(IS_ANDROID) || PA_BUILDFLAG(IS_LINUX)
+        # New: Also require __GLIBC__ for Linux (ifunc is glibc-specific)
+        sed -i 's/#if PA_BUILDFLAG(IS_ANDROID) || PA_BUILDFLAG(IS_LINUX)/#if PA_BUILDFLAG(IS_ANDROID) || (PA_BUILDFLAG(IS_LINUX) \&\& defined(__GLIBC__))/' "${AARCH64_SUPPORT_H}"
+        echo "   patched ${AARCH64_SUPPORT_H}"
+        grep -n "HAS_HW_CAPS" "${AARCH64_SUPPORT_H}" | head -3
+    else
+        echo "   warning: ${AARCH64_SUPPORT_H} not found"
+    fi
+fi
+
 # Patch bundled libc++ for musl support on Alpine
 if [[ -f /etc/alpine-release ]]; then
     echo "-- patching libc++ for musl support"
