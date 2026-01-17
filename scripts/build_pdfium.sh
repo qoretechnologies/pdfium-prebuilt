@@ -337,6 +337,24 @@ if [[ "${HOST_ARCH}" == "aarch64" || -f /etc/alpine-release ]]; then
     fi
 fi
 
+# On Alpine ARM64, patch toolchain to use correct musl target triple
+# PDFium's arm64 toolchain uses --target=aarch64-linux-gnu which is wrong for musl
+if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
+    echo "-- patching arm64 toolchain for musl target triple"
+    TOOLCHAIN_GN="${PDFIUM_SRC_DIR}/build/toolchain/linux/BUILD.gn"
+    if [[ -f "${TOOLCHAIN_GN}" ]]; then
+        # Replace aarch64-linux-gnu with aarch64-alpine-linux-musl
+        sed -i 's/aarch64-linux-gnu/aarch64-alpine-linux-musl/g' "${TOOLCHAIN_GN}"
+        echo "   patched ${TOOLCHAIN_GN}"
+        # Verify
+        if grep -q "aarch64-alpine-linux-musl" "${TOOLCHAIN_GN}"; then
+            echo "   patch verified"
+        fi
+    else
+        echo "   warning: ${TOOLCHAIN_GN} not found"
+    fi
+fi
+
 # Patch bundled libc++ for musl support on Alpine
 if [[ -f /etc/alpine-release ]]; then
     echo "-- patching libc++ for musl support"
