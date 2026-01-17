@@ -375,8 +375,13 @@ GN_ARGS=(
     "clang_use_chrome_plugins=false"
     "treat_warnings_as_errors=false"
     "target_os=\"linux\""
-    "target_cpu=\"${TARGET_CPU}\""
 )
+
+# On Alpine, don't set target_cpu to avoid triggering cross-compilation mode
+# which adds --target=aarch64-linux-gnu (wrong for musl)
+if [[ ! -f /etc/alpine-release ]]; then
+    GN_ARGS+=("target_cpu=\"${TARGET_CPU}\"")
+fi
 
 # On Alpine (musl compatibility) or ARM64 (bundled clang is x86_64), use system clang
 if [[ -f /etc/alpine-release ]]; then
