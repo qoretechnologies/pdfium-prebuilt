@@ -432,6 +432,18 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
         sed -i 's|#include <sys/ifunc.h>|#ifdef __GLIBC__\n#include <sys/ifunc.h>\n#endif|' "${TAGGING_CC}"
         echo "   patched ${TAGGING_CC}"
     fi
+
+    # Patch page_allocator_internals_posix.cc - musl doesn't support ifunc attribute
+    # Replace the ifunc mechanism with a direct function call
+    PAGE_ALLOC_POSIX="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/page_allocator_internals_posix.cc"
+    if [[ -f "${PAGE_ALLOC_POSIX}" ]]; then
+        # The ifunc attribute is used to resolve GetAccessFlags at runtime
+        # On musl, we need to call the resolver directly instead
+        # Replace: int GetAccessFlags(...) __attribute__((ifunc("ResolveGetAccessFlags")));
+        # With: inline int GetAccessFlags(...) { return reinterpret_cast<...>(ResolveGetAccessFlags())(...); }
+        sed -i 's/__attribute__((ifunc("ResolveGetAccessFlags")));/{ return reinterpret_cast<int (*)(PageAccessibilityConfiguration)>(ResolveGetAccessFlags())(access_config); }/' "${PAGE_ALLOC_POSIX}"
+        echo "   patched ${PAGE_ALLOC_POSIX} to disable ifunc"
+    fi
 fi
 
 # Patch bundled libc++ for musl support on Alpine
