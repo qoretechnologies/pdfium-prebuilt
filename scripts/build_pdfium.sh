@@ -399,39 +399,32 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
 fi
 
 # Patch partition_alloc for musl support on Alpine ARM64
-# The sys/ifunc.h header doesn't exist on musl - it's glibc-specific
-# We need to patch both aarch64_support.h and tagging.cc
+# Memory tagging (MTE) requires sys/ifunc.h which is glibc-specific
+# We need to disable memory tagging entirely for musl builds
 if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
-    echo "-- patching partition_alloc for musl (no sys/ifunc.h)"
+    echo "-- patching partition_alloc to disable memory tagging for musl"
 
-    # Patch aarch64_support.h - add __GLIBC__ check to HAS_HW_CAPS definition
+    # Patch partition_alloc.gni to disable memory tagging
+    # This is the proper fix - disable the feature at the GN level
+    PA_GNI="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/partition_alloc.gni"
+    if [[ -f "${PA_GNI}" ]]; then
+        # Replace the has_memory_tagging computation with false
+        # Original: has_memory_tagging = current_cpu == "arm64" && is_clang && ...
+        # New: has_memory_tagging = false  (for musl compatibility)
+        sed -i 's/^has_memory_tagging = current_cpu == "arm64"/# Disabled for musl: has_memory_tagging = current_cpu == "arm64"/' "${PA_GNI}"
+        # Add the override right after
+        sed -i '/^# Disabled for musl: has_memory_tagging/a has_memory_tagging = false  # musl does not have sys\/ifunc.h' "${PA_GNI}"
+        echo "   patched ${PA_GNI} to disable memory tagging"
+        grep -n "has_memory_tagging" "${PA_GNI}" | head -5
+    else
+        echo "   warning: ${PA_GNI} not found"
+    fi
+
+    # Also patch aarch64_support.h as a fallback - add __GLIBC__ check to HAS_HW_CAPS
     AARCH64_SUPPORT_H="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/aarch64_support.h"
     if [[ -f "${AARCH64_SUPPORT_H}" ]]; then
         sed -i 's/#if PA_BUILDFLAG(IS_ANDROID) || PA_BUILDFLAG(IS_LINUX)/#if PA_BUILDFLAG(IS_ANDROID) || (PA_BUILDFLAG(IS_LINUX) \&\& defined(__GLIBC__))/' "${AARCH64_SUPPORT_H}"
         echo "   patched ${AARCH64_SUPPORT_H}"
-    fi
-
-    # Patch tagging.cc - wrap sys/ifunc.h include with __GLIBC__ check
-    # The include is inside #if PA_BUILDFLAG(HAS_MEMORY_TAGGING) block
-    TAGGING_CC="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/tagging.cc"
-    if [[ -f "${TAGGING_CC}" ]]; then
-        # Replace the unconditional include with a conditional one
-        sed -i 's|#include <sys/ifunc.h>|#ifdef __GLIBC__\n#include <sys/ifunc.h>\n#endif|' "${TAGGING_CC}"
-        echo "   patched ${TAGGING_CC}"
-    fi
-
-    # Also patch partition_alloc.gni to disable memory tagging on non-glibc
-    # This is the proper fix - disable the feature entirely for musl
-    PA_GNI="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/partition_alloc.gni"
-    if [[ -f "${PA_GNI}" ]]; then
-        # Add an override to disable has_memory_tagging
-        # Find: has_memory_tagging = current_cpu == "arm64" && ...
-        # Note: This is complex, so we'll add a simpler override at the end
-        if grep -q "has_memory_tagging = current_cpu" "${PA_GNI}"; then
-            # Instead of complex sed, just override by adding a line after the definition
-            sed -i '/^has_memory_tagging = current_cpu/a # Override for musl: disable memory tagging\nif (target_os == "linux" && target_cpu == "arm64") {\n  # Note: This will be checked at runtime by __GLIBC__ in the source\n}' "${PA_GNI}" 2>/dev/null || true
-            echo "   note: could not patch ${PA_GNI}, relying on source patches"
-        fi
     fi
 fi
 
