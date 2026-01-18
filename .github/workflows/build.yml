@@ -258,16 +258,17 @@ jobs:
           path: dist/*.tar.xz
       - name: Upload artifact (ARM64 workaround)
         # JavaScript actions don't work in Alpine ARM64 containers
-        # Copy artifact to runner workspace (outside container) for manual upload
+        # Copy artifact to runner's temp directory for manual upload
         if: matrix.arch == 'arm64'
         shell: bash
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
         run: |
-          # The artifact needs to be accessible outside the container
-          # Copy to the GitHub workspace which is bind-mounted
-          mkdir -p "$GITHUB_WORKSPACE/../alpine-arm64-artifact"
-          cp dist/*.tar.xz "$GITHUB_WORKSPACE/../alpine-arm64-artifact/"
-          ls -la "$GITHUB_WORKSPACE/../alpine-arm64-artifact/"
-          echo "Artifact copied to runner workspace for upload in release job"
+          # Copy to runner's temp directory (accessible outside container)
+          mkdir -p "${RUNNER_TEMP}/alpine-arm64-artifact"
+          cp dist/*.tar.xz "${RUNNER_TEMP}/alpine-arm64-artifact/"
+          ls -la "${RUNNER_TEMP}/alpine-arm64-artifact/"
+          echo "Artifact copied to ${RUNNER_TEMP}/alpine-arm64-artifact for upload"
 
   upload-alpine-arm64:
     # Separate job to upload Alpine ARM64 artifact from outside the container
@@ -279,7 +280,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pdfium-alpine-arm64
-          path: ../alpine-arm64-artifact/*.tar.xz
+          path: ${{ runner.temp }}/alpine-arm64-artifact/*.tar.xz
           if-no-files-found: error
 
   release:
