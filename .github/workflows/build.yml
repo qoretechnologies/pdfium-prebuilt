@@ -192,22 +192,26 @@ jobs:
             TARGET_TRIPLE="aarch64-unknown-linux-gnu"
             ARCH_SUFFIX="aarch64"
           fi
-          # Create symlinks at the system clang version path (PDFium uses same version when clang_base_path="/usr")
-          mkdir -p /usr/lib/clang/${CLANG_VER}/lib/${TARGET_TRIPLE}
-          echo "Creating symlinks in /usr/lib/clang/${CLANG_VER}/lib/${TARGET_TRIPLE}"
-          # Symlink all runtime libs and create aliases without arch suffix (PDFium expects both)
-          for f in /usr/lib/clang/${CLANG_VER}/lib/${ALPINE_TRIPLE}/*; do
-            if [ -f "$f" ]; then
-              fname=$(basename "$f")
-              ln -sf "$f" /usr/lib/clang/${CLANG_VER}/lib/${TARGET_TRIPLE}/${fname}
-              # Also create symlink without arch suffix (e.g., libclang_rt.builtins.a from libclang_rt.builtins-x86_64.a)
-              fname_no_arch=$(echo "$fname" | sed "s/-${ARCH_SUFFIX}//")
-              if [ "$fname" != "$fname_no_arch" ]; then
-                ln -sf "$f" /usr/lib/clang/${CLANG_VER}/lib/${TARGET_TRIPLE}/${fname_no_arch}
+          # PDFium bundles its own clang and expects libs at /usr/lib/clang/<bundled-ver>/lib/<triple>/
+          # Different PDFium versions bundle different clang versions (18, 19, 20, 21, 22...)
+          # Create symlinks for a range of versions to cover all cases
+          for PDFIUM_CLANG_VER in 18 19 20 21 22 23; do
+            mkdir -p /usr/lib/clang/${PDFIUM_CLANG_VER}/lib/${TARGET_TRIPLE}
+            # Symlink all runtime libs from system clang
+            for f in /usr/lib/clang/${CLANG_VER}/lib/${ALPINE_TRIPLE}/*; do
+              if [ -f "$f" ]; then
+                fname=$(basename "$f")
+                ln -sf "$f" /usr/lib/clang/${PDFIUM_CLANG_VER}/lib/${TARGET_TRIPLE}/${fname}
+                # Also create symlink without arch suffix
+                fname_no_arch=$(echo "$fname" | sed "s/-${ARCH_SUFFIX}//")
+                if [ "$fname" != "$fname_no_arch" ]; then
+                  ln -sf "$f" /usr/lib/clang/${PDFIUM_CLANG_VER}/lib/${TARGET_TRIPLE}/${fname_no_arch}
+                fi
               fi
-            fi
+            done
           done
-          ls -la /usr/lib/clang/${CLANG_VER}/lib/${TARGET_TRIPLE}/ || echo "Directory not created"
+          echo "Created symlinks for clang versions 18-23"
+          ls -la /usr/lib/clang/20/lib/${TARGET_TRIPLE}/ || echo "Directory not created"
       # NOTE: Using manual git checkout because actions/checkout@v4 (JavaScript action)
       # doesn't work in Alpine containers on ARM64 runners
       - name: Checkout
