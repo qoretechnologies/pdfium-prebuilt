@@ -69,7 +69,7 @@ jobs:
           # PDFium build expects clang runtime libraries at specific paths
           # that differ from Ubuntu's default layout
           CLANG_VER=$(clang --version | head -1 | sed 's/.*version \([0-9]*\).*/\1/')
-          echo "Detected clang version: ${CLANG_VER}"
+          echo "Detected system clang version: ${CLANG_VER}"
 
           # Find where Ubuntu has the clang runtime libs
           # Ubuntu 24.04 uses /usr/lib/llvm-<ver>/lib/clang/<ver>/lib/linux/
@@ -81,27 +81,29 @@ jobs:
           echo "Ubuntu runtime path: ${UBUNTU_RT_PATH}"
           ls -la "${UBUNTU_RT_PATH}" || echo "Warning: runtime path not found"
 
-          # PDFium expects libs at /usr/lib/clang/21/lib/aarch64-unknown-linux-gnu/
-          # (it uses the version from its bundled clang, not system clang)
-          # We need to symlink to where the system clang has its runtime libs
-          TARGET_DIR="/usr/lib/clang/21/lib/aarch64-unknown-linux-gnu"
-          mkdir -p "${TARGET_DIR}"
+          # PDFium bundles its own clang and expects libs at /usr/lib/clang/<bundled-ver>/lib/aarch64-unknown-linux-gnu/
+          # Different PDFium versions bundle different clang versions (19, 20, 21, 22...)
+          # Create symlinks for a range of versions to cover all cases
+          for PDFIUM_CLANG_VER in 18 19 20 21 22 23; do
+            TARGET_DIR="/usr/lib/clang/${PDFIUM_CLANG_VER}/lib/aarch64-unknown-linux-gnu"
+            mkdir -p "${TARGET_DIR}"
 
-          # Symlink runtime libraries
-          for f in "${UBUNTU_RT_PATH}"/libclang_rt.*-aarch64*; do
-            if [[ -f "$f" ]]; then
-              fname=$(basename "$f")
-              ln -sf "$f" "${TARGET_DIR}/${fname}"
-              # Also create symlink without arch suffix
-              fname_no_arch=$(echo "$fname" | sed 's/-aarch64//')
-              if [[ "$fname" != "$fname_no_arch" ]]; then
-                ln -sf "$f" "${TARGET_DIR}/${fname_no_arch}"
+            # Symlink runtime libraries
+            for f in "${UBUNTU_RT_PATH}"/libclang_rt.*-aarch64*; do
+              if [[ -f "$f" ]]; then
+                fname=$(basename "$f")
+                ln -sf "$f" "${TARGET_DIR}/${fname}"
+                # Also create symlink without arch suffix
+                fname_no_arch=$(echo "$fname" | sed 's/-aarch64//')
+                if [[ "$fname" != "$fname_no_arch" ]]; then
+                  ln -sf "$f" "${TARGET_DIR}/${fname_no_arch}"
+                fi
               fi
-            fi
+            done
           done
 
-          echo "Created symlinks in ${TARGET_DIR}:"
-          ls -la "${TARGET_DIR}"
+          echo "Created symlinks for clang versions 18-23"
+          ls -la /usr/lib/clang/20/lib/aarch64-unknown-linux-gnu/ || true
       - name: Build PDFium
         run: |
           ./scripts/build_pdfium.sh \
