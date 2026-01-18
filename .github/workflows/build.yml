@@ -250,17 +250,44 @@ jobs:
             --arch "${{ matrix.arch }}" \
             --pdfium-ref "${{ inputs.pdfium_ref }}" \
             --chromium-milestone "${{ inputs.chromium_milestone }}"
-      - name: Upload artifact
+      - name: Upload artifact (AMD64)
+        if: matrix.arch == 'amd64'
         uses: actions/upload-artifact@v4
         with:
           name: pdfium-alpine-${{ matrix.arch }}
           path: dist/*.tar.xz
+      - name: Upload artifact (ARM64 workaround)
+        # JavaScript actions don't work in Alpine ARM64 containers
+        # Copy artifact to runner workspace (outside container) for manual upload
+        if: matrix.arch == 'arm64'
+        shell: bash
+        run: |
+          # The artifact needs to be accessible outside the container
+          # Copy to the GitHub workspace which is bind-mounted
+          mkdir -p "$GITHUB_WORKSPACE/../alpine-arm64-artifact"
+          cp dist/*.tar.xz "$GITHUB_WORKSPACE/../alpine-arm64-artifact/"
+          ls -la "$GITHUB_WORKSPACE/../alpine-arm64-artifact/"
+          echo "Artifact copied to runner workspace for upload in release job"
+
+  upload-alpine-arm64:
+    # Separate job to upload Alpine ARM64 artifact from outside the container
+    needs: build-alpine
+    runs-on: self-hosted-arm64
+    if: always() && needs.build-alpine.result == 'success'
+    steps:
+      - name: Upload Alpine ARM64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdfium-alpine-arm64
+          path: ../alpine-arm64-artifact/*.tar.xz
+          if-no-files-found: error
 
   release:
     runs-on: self-hosted-amd64
     needs:
       - build-ubuntu
       - build-alpine
+      - upload-alpine-arm64
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
