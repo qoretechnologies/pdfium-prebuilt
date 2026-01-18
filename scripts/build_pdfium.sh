@@ -434,14 +434,16 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     fi
 
     # Patch page_allocator_internals_posix.cc - musl doesn't support ifunc attribute
-    # Replace the ifunc mechanism with a direct function call
+    # Replace the ifunc mechanism with a direct call to non-MTE implementation
     PAGE_ALLOC_POSIX="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/page_allocator_internals_posix.cc"
     if [[ -f "${PAGE_ALLOC_POSIX}" ]]; then
-        # The ifunc attribute is used to resolve GetAccessFlags at runtime
-        # On musl, we need to call the resolver directly instead
-        # Replace: int GetAccessFlags(...) __attribute__((ifunc("ResolveGetAccessFlags")));
-        # With: inline int GetAccessFlags(...) { return reinterpret_cast<...>(ResolveGetAccessFlags())(...); }
-        sed -i 's/__attribute__((ifunc("ResolveGetAccessFlags")));/{ return reinterpret_cast<int (*)(PageAccessibilityConfiguration)>(ResolveGetAccessFlags())(access_config); }/' "${PAGE_ALLOC_POSIX}"
+        # The ifunc attribute resolves to either MTE or non-MTE version at runtime
+        # Since musl doesn't support ifunc and MTE is disabled, call non-MTE version directly
+        # First add parameter name, then replace ifunc with direct call
+        # Original: int GetAccessFlags(PageAccessibilityConfiguration) __attribute__((ifunc(...)));
+        # Target: int GetAccessFlags(PageAccessibilityConfiguration cfg) { return GetAccessFlagsNoMte(cfg); }
+        sed -i 's/int GetAccessFlags(PageAccessibilityConfiguration)/int GetAccessFlags(PageAccessibilityConfiguration cfg)/' "${PAGE_ALLOC_POSIX}"
+        sed -i 's/__attribute__((ifunc("ResolveGetAccessFlags")));/{ return GetAccessFlagsNoMte(cfg); }/' "${PAGE_ALLOC_POSIX}"
         echo "   patched ${PAGE_ALLOC_POSIX} to disable ifunc"
     fi
 fi
