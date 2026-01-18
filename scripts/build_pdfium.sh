@@ -405,17 +405,15 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- patching partition_alloc to disable memory tagging for musl"
 
     # Patch partition_alloc.gni to disable memory tagging
-    # This is the proper fix - disable the feature at the GN level
+    # This is the proper fix - disable the feature at the GN level by appending override
     PA_GNI="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/partition_alloc.gni"
     if [[ -f "${PA_GNI}" ]]; then
-        # Replace the has_memory_tagging computation with false
-        # Original: has_memory_tagging = current_cpu == "arm64" && is_clang && ...
-        # New: has_memory_tagging = false  (for musl compatibility)
-        sed -i 's/^has_memory_tagging = current_cpu == "arm64"/# Disabled for musl: has_memory_tagging = current_cpu == "arm64"/' "${PA_GNI}"
-        # Add the override right after
-        sed -i '/^# Disabled for musl: has_memory_tagging/a has_memory_tagging = false  # musl does not have sys\/ifunc.h' "${PA_GNI}"
+        # Append override at end of file (GN uses last assignment)
+        echo "" >> "${PA_GNI}"
+        echo "# Override for Alpine musl - sys/ifunc.h not available" >> "${PA_GNI}"
+        echo "has_memory_tagging = false" >> "${PA_GNI}"
         echo "   patched ${PA_GNI} to disable memory tagging"
-        grep -n "has_memory_tagging" "${PA_GNI}" | head -5
+        tail -5 "${PA_GNI}"
     else
         echo "   warning: ${PA_GNI} not found"
     fi
@@ -492,11 +490,6 @@ if [[ -f /etc/alpine-release ]]; then
         "use_custom_libcxx=false"
         "use_allocator_shim=false"
     )
-    # Disable memory tagging on Alpine ARM64 - it requires sys/ifunc.h which is glibc-specific
-    if [[ "${HOST_ARCH}" == "aarch64" ]]; then
-        echo "-- disabling memory tagging for Alpine ARM64 (musl has no sys/ifunc.h)"
-        GN_ARGS+=("enable_mte_checked_ptr=false")
-    fi
 elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- configuring for ARM64: using system clang"
     GN_ARGS+=(
