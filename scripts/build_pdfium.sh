@@ -426,6 +426,14 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
         sed -i 's/#if PA_BUILDFLAG(IS_ANDROID) || PA_BUILDFLAG(IS_LINUX)/#if PA_BUILDFLAG(IS_ANDROID) || (PA_BUILDFLAG(IS_LINUX) \&\& defined(__GLIBC__))/' "${AARCH64_SUPPORT_H}"
         echo "   patched ${AARCH64_SUPPORT_H}"
     fi
+
+    # Patch tagging.cc - wrap sys/ifunc.h include with __GLIBC__ check
+    TAGGING_CC="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/tagging.cc"
+    if [[ -f "${TAGGING_CC}" ]]; then
+        # Replace the unconditional include with a conditional one
+        sed -i 's|#include <sys/ifunc.h>|#ifdef __GLIBC__\n#include <sys/ifunc.h>\n#endif|' "${TAGGING_CC}"
+        echo "   patched ${TAGGING_CC}"
+    fi
 fi
 
 # Patch bundled libc++ for musl support on Alpine
@@ -484,6 +492,11 @@ if [[ -f /etc/alpine-release ]]; then
         "use_custom_libcxx=false"
         "use_allocator_shim=false"
     )
+    # Disable memory tagging on Alpine ARM64 - it requires sys/ifunc.h which is glibc-specific
+    if [[ "${HOST_ARCH}" == "aarch64" ]]; then
+        echo "-- disabling memory tagging for Alpine ARM64 (musl has no sys/ifunc.h)"
+        GN_ARGS+=("enable_mte_checked_ptr=false")
+    fi
 elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
     echo "-- configuring for ARM64: using system clang"
     GN_ARGS+=(
