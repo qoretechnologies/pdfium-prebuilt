@@ -434,17 +434,14 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     fi
 
     # Patch page_allocator_internals_posix.cc - musl doesn't support ifunc attribute
-    # Replace the ifunc mechanism with a direct call to non-MTE implementation
+    # Wrap the ifunc resolver with #ifdef __GLIBC__ and add a fallback for musl
     PAGE_ALLOC_POSIX="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/page_allocator_internals_posix.cc"
     if [[ -f "${PAGE_ALLOC_POSIX}" ]]; then
-        # The ifunc attribute resolves to either MTE or non-MTE version at runtime
-        # Since musl doesn't support ifunc and MTE is disabled, call non-MTE version directly
-        # Comment out the ifunc declaration lines and add a direct function implementation
-        # The original has: int GetAccessFlags(PageAccessibilityConfiguration accessibility)
-        # followed by: __attribute__((ifunc("ResolveGetAccessFlags")));
-        sed -i 's/int GetAccessFlags(PageAccessibilityConfiguration [a-z_]*)/\/\/ MUSL_PATCH: \0/' "${PAGE_ALLOC_POSIX}"
-        sed -i 's/__attribute__((ifunc("ResolveGetAccessFlags")));/\/\/ MUSL_PATCH: __attribute__((ifunc("ResolveGetAccessFlags")));\nint GetAccessFlags(PageAccessibilityConfiguration access_config) { return GetAccessFlagsNoMte(access_config); }/' "${PAGE_ALLOC_POSIX}"
-        echo "   patched ${PAGE_ALLOC_POSIX} to disable ifunc"
+        # Add #ifdef __GLIBC__ before the ifunc resolver
+        sed -i 's/using GetAccessFlagsInternalFn/#ifdef __GLIBC__\nusing GetAccessFlagsInternalFn/' "${PAGE_ALLOC_POSIX}"
+        # Add #else and fallback after the ifunc declaration
+        sed -i 's/__attribute__((ifunc("ResolveGetAccessFlags")));/__attribute__((ifunc("ResolveGetAccessFlags")));\n#else\n\/\/ musl does not support ifunc - use non-MTE version directly\nint GetAccessFlags(PageAccessibilityConfiguration accessibility) {\n  return GetAccessFlags<false, false>(accessibility);\n}\n#endif/' "${PAGE_ALLOC_POSIX}"
+        echo "   patched ${PAGE_ALLOC_POSIX} to disable ifunc for non-glibc"
     fi
 fi
 
