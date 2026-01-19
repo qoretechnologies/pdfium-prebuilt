@@ -428,19 +428,42 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     # Patch tagging.cc - wrap sys/ifunc.h include with __GLIBC__ check
     TAGGING_CC="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/tagging.cc"
     if [[ -f "${TAGGING_CC}" ]]; then
-        # Replace the unconditional include with a conditional one
-        sed -i 's|#include <sys/ifunc.h>|#ifdef __GLIBC__\n#include <sys/ifunc.h>\n#endif|' "${TAGGING_CC}"
+        # Use awk for multi-line replacement since Alpine's sed doesn't support \n
+        awk '
+        /#include <sys\/ifunc.h>/ {
+            print "#ifdef __GLIBC__"
+            print $0
+            print "#endif"
+            next
+        }
+        { print }
+        ' "${TAGGING_CC}" > "${TAGGING_CC}.tmp" && mv "${TAGGING_CC}.tmp" "${TAGGING_CC}"
         echo "   patched ${TAGGING_CC}"
     fi
 
     # Patch page_allocator_internals_posix.cc - musl doesn't support ifunc attribute
-    # Wrap the ifunc resolver with #ifdef __GLIBC__ and add a fallback for musl
+    # Use awk for multi-line replacement since Alpine's sed doesn't support \n in replacement
     PAGE_ALLOC_POSIX="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/page_allocator_internals_posix.cc"
     if [[ -f "${PAGE_ALLOC_POSIX}" ]]; then
-        # Add #ifdef __GLIBC__ before the ifunc resolver
-        sed -i 's/using GetAccessFlagsInternalFn/#ifdef __GLIBC__\nusing GetAccessFlagsInternalFn/' "${PAGE_ALLOC_POSIX}"
-        # Add #else and fallback after the ifunc declaration
-        sed -i 's/__attribute__((ifunc("ResolveGetAccessFlags")));/__attribute__((ifunc("ResolveGetAccessFlags")));\n#else\n\/\/ musl does not support ifunc - use non-MTE version directly\nint GetAccessFlags(PageAccessibilityConfiguration accessibility) {\n  return GetAccessFlags<false, false>(accessibility);\n}\n#endif/' "${PAGE_ALLOC_POSIX}"
+        # Use awk to wrap the ifunc section with #ifdef __GLIBC__ and add musl fallback
+        awk '
+        /using GetAccessFlagsInternalFn/ {
+            print "#ifdef __GLIBC__"
+            print $0
+            next
+        }
+        /__attribute__\(\(ifunc\("ResolveGetAccessFlags"\)\)\);/ {
+            print $0
+            print "#else"
+            print "// musl does not support ifunc - use non-MTE version directly"
+            print "int GetAccessFlags(PageAccessibilityConfiguration accessibility) {"
+            print "  return GetAccessFlags<false, false>(accessibility);"
+            print "}"
+            print "#endif"
+            next
+        }
+        { print }
+        ' "${PAGE_ALLOC_POSIX}" > "${PAGE_ALLOC_POSIX}.tmp" && mv "${PAGE_ALLOC_POSIX}.tmp" "${PAGE_ALLOC_POSIX}"
         echo "   patched ${PAGE_ALLOC_POSIX} to disable ifunc for non-glibc"
     fi
 fi
