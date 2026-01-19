@@ -439,8 +439,9 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     if [[ -f "${PAGE_ALLOC_POSIX}" ]]; then
         # The ifunc attribute resolves to either MTE or non-MTE version at runtime
         # Since musl doesn't support ifunc and MTE is disabled, call non-MTE version directly
-        # Use perl for multi-line replacement to handle the function declaration properly
-        perl -i -0pe 's/int GetAccessFlags\(PageAccessibilityConfiguration\)\s*\n\s*__attribute__\(\(ifunc\("ResolveGetAccessFlags"\)\)\);/int GetAccessFlags(PageAccessibilityConfiguration access_config) {\n  return GetAccessFlagsNoMte(access_config);\n}/s' "${PAGE_ALLOC_POSIX}"
+        # Comment out the ifunc declaration lines and add a direct function implementation
+        sed -i 's/int GetAccessFlags(PageAccessibilityConfiguration)/\/\/ MUSL_PATCH: int GetAccessFlags(PageAccessibilityConfiguration)/' "${PAGE_ALLOC_POSIX}"
+        sed -i 's/__attribute__((ifunc("ResolveGetAccessFlags")));/\/\/ MUSL_PATCH: __attribute__((ifunc("ResolveGetAccessFlags")));\nint GetAccessFlags(PageAccessibilityConfiguration access_config) { return GetAccessFlagsNoMte(access_config); }/' "${PAGE_ALLOC_POSIX}"
         echo "   patched ${PAGE_ALLOC_POSIX} to disable ifunc"
     fi
 fi
