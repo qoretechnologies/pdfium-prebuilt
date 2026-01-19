@@ -265,37 +265,23 @@ jobs:
           path: dist/*.tar.xz
       - name: Upload artifact (ARM64 workaround)
         # JavaScript actions don't work in Alpine ARM64 containers
-        # Copy artifact to runner's temp directory for manual upload
+        # Use gh CLI to upload artifact since it's a static binary
         if: matrix.arch == 'arm64'
         shell: bash
         env:
-          RUNNER_TEMP: ${{ runner.temp }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Copy to runner's temp directory (accessible outside container)
-          mkdir -p "${RUNNER_TEMP}/alpine-arm64-artifact"
-          cp dist/*.tar.xz "${RUNNER_TEMP}/alpine-arm64-artifact/"
-          ls -la "${RUNNER_TEMP}/alpine-arm64-artifact/"
-          echo "Artifact copied to ${RUNNER_TEMP}/alpine-arm64-artifact for upload"
-
-  upload-alpine-arm64:
-    # Separate job to upload Alpine ARM64 artifact from outside the container
-    needs: build-alpine
-    runs-on: self-hosted-arm64
-    if: always() && needs.build-alpine.result == 'success'
-    steps:
-      - name: Upload Alpine ARM64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdfium-alpine-arm64
-          path: ${{ runner.temp }}/alpine-arm64-artifact/*.tar.xz
-          if-no-files-found: error
+          # Install gh CLI (static binary works on musl)
+          wget -q https://github.com/cli/cli/releases/download/v2.62.0/gh_2.62.0_linux_arm64.tar.gz
+          tar xzf gh_2.62.0_linux_arm64.tar.gz
+          ./gh_2.62.0_linux_arm64/bin/gh run upload --repo "${{ github.repository }}" --name pdfium-alpine-arm64 dist/*.tar.xz
+          echo "Artifact uploaded via gh CLI"
 
   release:
     runs-on: self-hosted-amd64
     needs:
       - build-ubuntu
       - build-alpine
-      - upload-alpine-arm64
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
