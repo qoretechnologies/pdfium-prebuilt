@@ -160,6 +160,7 @@ jobs:
             llvm \
             ninja \
             nodejs \
+            perl \
             pkgconf \
             py3-pip \
             py3-six \
