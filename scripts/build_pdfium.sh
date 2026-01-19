@@ -442,29 +442,24 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     fi
 
     # Patch page_allocator_internals_posix.cc - musl doesn't support ifunc attribute
-    # Use awk for multi-line replacement since Alpine's sed doesn't support \n in replacement
+    # Insert a musl-specific GetAccessFlags function before the namespace closing brace
     PAGE_ALLOC_POSIX="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/page_allocator_internals_posix.cc"
     if [[ -f "${PAGE_ALLOC_POSIX}" ]]; then
-        # Use awk to wrap the ifunc section with #ifdef __GLIBC__ and add musl fallback
+        # Insert before the final "}  // namespace" line using awk
         awk '
-        /using GetAccessFlagsInternalFn/ {
-            print "#ifdef __GLIBC__"
-            print $0
-            next
-        }
-        /__attribute__\(\(ifunc\("ResolveGetAccessFlags"\)\)\);/ {
-            print $0
-            print "#else"
-            print "// musl does not support ifunc - use non-MTE version directly"
+        /^}  \/\/ namespace partition_alloc::internal$/ {
+            print ""
+            print "// MUSL_PATCH: musl does not support ifunc attribute, provide direct implementation"
+            print "#if !defined(__GLIBC__)"
             print "int GetAccessFlags(PageAccessibilityConfiguration accessibility) {"
             print "  return GetAccessFlags<false, false>(accessibility);"
             print "}"
             print "#endif"
-            next
+            print ""
         }
         { print }
         ' "${PAGE_ALLOC_POSIX}" > "${PAGE_ALLOC_POSIX}.tmp" && mv "${PAGE_ALLOC_POSIX}.tmp" "${PAGE_ALLOC_POSIX}"
-        echo "   patched ${PAGE_ALLOC_POSIX} to disable ifunc for non-glibc"
+        echo "   patched ${PAGE_ALLOC_POSIX} to add musl fallback"
     fi
 fi
 
