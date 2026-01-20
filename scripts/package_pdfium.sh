@@ -82,26 +82,12 @@ if [[ ! -f "${PDFIUM_LICENSE}" ]]; then
 fi
 
 # PDFium outputs libraries with various names depending on build configuration
-# Look for libpdfium.so, libpdfium.cr.so, or obj/libpdfium.a (thin archive)
-LIB_SHARED=""
-LIB_STATIC=""
-if [[ -f "${PDFIUM_OUT}/libpdfium.so" ]]; then
-    LIB_SHARED="${PDFIUM_OUT}/libpdfium.so"
-elif [[ -f "${PDFIUM_OUT}/libpdfium.cr.so" ]]; then
-    LIB_SHARED="${PDFIUM_OUT}/libpdfium.cr.so"
-fi
-if [[ -f "${PDFIUM_OUT}/obj/libpdfium.a" ]]; then
-    LIB_STATIC="${PDFIUM_OUT}/obj/libpdfium.a"
-elif [[ -f "${PDFIUM_OUT}/libpdfium.a" ]]; then
-    LIB_STATIC="${PDFIUM_OUT}/libpdfium.a"
-fi
-if [[ -z "${LIB_SHARED}" && -z "${LIB_STATIC}" ]]; then
-    echo "Missing PDFium libraries in ${PDFIUM_OUT}" >&2
-    echo "Available files:" >&2
-    ls -la "${PDFIUM_OUT}/" >&2
-    ls -la "${PDFIUM_OUT}/obj/" 2>/dev/null >&2 || true
-    exit 1
-fi
+# For component builds (is_component_build=true), there are multiple .so files
+# For non-component builds, there's a single libpdfium.a or libpdfium.so
+
+# Count shared libraries
+SHARED_COUNT=$(find "${PDFIUM_OUT}" -maxdepth 1 -name "*.so" 2>/dev/null | wc -l)
+echo "Found ${SHARED_COUNT} shared libraries in ${PDFIUM_OUT}"
 
 STAGE_DIR="${DIST_DIR}/stage"
 rm -rf "${STAGE_DIR}"
@@ -109,13 +95,31 @@ mkdir -p "${STAGE_DIR}/include" "${STAGE_DIR}/lib" "${STAGE_DIR}/LICENSES"
 
 cp -R "${PDFIUM_SRC}/public/." "${STAGE_DIR}/include/"
 
-if [[ -n "${LIB_SHARED}" ]]; then
-    # Always name output libpdfium.so for consistency
-    cp "${LIB_SHARED}" "${STAGE_DIR}/lib/libpdfium.so"
+if [[ ${SHARED_COUNT} -gt 0 ]]; then
+    echo "Packaging component build (multiple .so files)..."
+    # Copy all shared libraries for component builds
+    for so_file in "${PDFIUM_OUT}"/*.so; do
+        if [[ -f "${so_file}" ]]; then
+            cp "${so_file}" "${STAGE_DIR}/lib/"
+            echo "  copied $(basename "${so_file}")"
+        fi
+    done
+elif [[ -f "${PDFIUM_OUT}/obj/libpdfium.a" ]]; then
+    echo "Packaging static build..."
+    cp "${PDFIUM_OUT}/obj/libpdfium.a" "${STAGE_DIR}/lib/libpdfium.a"
+elif [[ -f "${PDFIUM_OUT}/libpdfium.a" ]]; then
+    echo "Packaging static build..."
+    cp "${PDFIUM_OUT}/libpdfium.a" "${STAGE_DIR}/lib/libpdfium.a"
+else
+    echo "Missing PDFium libraries in ${PDFIUM_OUT}" >&2
+    echo "Available files:" >&2
+    ls -la "${PDFIUM_OUT}/" >&2
+    ls -la "${PDFIUM_OUT}/obj/" 2>/dev/null >&2 || true
+    exit 1
 fi
-if [[ -n "${LIB_STATIC}" ]]; then
-    cp "${LIB_STATIC}" "${STAGE_DIR}/lib/libpdfium.a"
-fi
+
+echo "Libraries packaged:"
+ls -la "${STAGE_DIR}/lib/"
 
 cp "${PDFIUM_LICENSE}" "${STAGE_DIR}/LICENSES/PDFIUM.LICENSE"
 

@@ -127,9 +127,10 @@ else
         -lm \
         -lpthread"
 
-    # On Linux, we need to add rpath for shared library
+    # On Linux, we need to add rpath for runtime and rpath-link for link-time
+    # resolution of indirect dependencies (component builds have multiple .so files)
     if [[ "$(uname)" == "Linux" ]]; then
-        COMPILE_CMD="${COMPILE_CMD} -Wl,-rpath,${PDFIUM_DIR}/lib"
+        COMPILE_CMD="${COMPILE_CMD} -Wl,-rpath,${PDFIUM_DIR}/lib -Wl,-rpath-link,${PDFIUM_DIR}/lib"
     fi
 fi
 
