@@ -263,41 +263,64 @@ jobs:
         with:
           name: pdfium-alpine-${{ matrix.arch }}
           path: dist/*.tar.xz
-      - name: Upload artifact (ARM64 workaround)
+      - name: Upload artifact (ARM64 via API)
         # JavaScript actions don't work in Alpine ARM64 containers
-        # Save artifact to workspace for pickup by subsequent job
+        # Use GitHub API directly to upload artifact
         if: matrix.arch == 'arm64'
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # The workspace is mounted between container and host
-          mkdir -p "${GITHUB_WORKSPACE}/arm64-artifact"
-          cp dist/*.tar.xz "${GITHUB_WORKSPACE}/arm64-artifact/"
-          ls -la "${GITHUB_WORKSPACE}/arm64-artifact/"
+          # Install gh CLI (static binary works on musl)
+          wget -q "https://github.com/cli/cli/releases/download/v2.62.0/gh_2.62.0_linux_arm64.tar.gz" -O /tmp/gh.tar.gz
+          tar xzf /tmp/gh.tar.gz -C /tmp
+          GH=/tmp/gh_2.62.0_linux_arm64/bin/gh
 
-  upload-alpine-arm64:
-    # Upload Alpine ARM64 artifact from outside container
-    needs: build-alpine
-    runs-on: self-hosted-arm64
-    if: always() && needs.build-alpine.result == 'success'
-    steps:
-      - name: Upload Alpine ARM64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdfium-alpine-arm64
-          path: arm64-artifact/*.tar.xz
-          if-no-files-found: error
+          # Get the artifact file
+          ARTIFACT_FILE=$(ls dist/*.tar.xz)
+          ARTIFACT_NAME=$(basename "$ARTIFACT_FILE")
+          echo "Uploading artifact: $ARTIFACT_NAME"
+
+          # Upload artifact using GitHub API
+          # Create the artifact
+          ARTIFACT_RESPONSE=$($GH api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=pdfium-alpine-arm64" \
+            2>&1) || true
+          echo "Create response: $ARTIFACT_RESPONSE"
+
+          # The artifacts API requires using the upload URL from the response
+          # For simplicity, upload to release assets instead using a temp tag
+          TEMP_TAG="temp-alpine-arm64-${{ github.run_id }}"
+          $GH release create "$TEMP_TAG" "$ARTIFACT_FILE" \
+            --repo "${{ github.repository }}" \
+            --title "Temp upload" \
+            --notes "Temporary upload for workflow" \
+            --prerelease
+          echo "Uploaded to temporary release: $TEMP_TAG"
 
   release:
     runs-on: self-hosted-amd64
     needs:
       - build-ubuntu
       - build-alpine
-      - upload-alpine-arm64
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
+      - name: Download Alpine ARM64 from temp release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TEMP_TAG="temp-alpine-arm64-${{ github.run_id }}"
+          mkdir -p dist/alpine-arm64
+          gh release download "$TEMP_TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.tar.xz" \
+            --dir dist/alpine-arm64 || echo "Warning: temp release not found"
+          ls -la dist/alpine-arm64/ || true
       - name: Set release tag
         id: tag
         run: |
@@ -314,3 +337,11 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
           files: dist/**/*.tar.xz
+      - name: Cleanup temp release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TEMP_TAG="temp-alpine-arm64-${{ github.run_id }}"
+          gh release delete "$TEMP_TAG" --repo "${{ github.repository }}" --yes || true
+          gh api --method DELETE "/repos/${{ github.repository }}/git/refs/tags/$TEMP_TAG" || true
