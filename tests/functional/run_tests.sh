@@ -54,12 +54,14 @@ if [[ ! -d "${PDFIUM_DIR}/lib" ]]; then
     exit 1
 fi
 
-# Find the library
+# Find the library (prefer static for simpler linking)
 PDFIUM_LIB=""
-if [[ -f "${PDFIUM_DIR}/lib/libpdfium.so" ]]; then
-    PDFIUM_LIB="${PDFIUM_DIR}/lib/libpdfium.so"
-elif [[ -f "${PDFIUM_DIR}/lib/libpdfium.a" ]]; then
+USE_STATIC=false
+if [[ -f "${PDFIUM_DIR}/lib/libpdfium.a" ]]; then
     PDFIUM_LIB="${PDFIUM_DIR}/lib/libpdfium.a"
+    USE_STATIC=true
+elif [[ -f "${PDFIUM_DIR}/lib/libpdfium.so" ]]; then
+    PDFIUM_LIB="${PDFIUM_DIR}/lib/libpdfium.so"
 else
     echo "Error: No libpdfium.so or libpdfium.a found in ${PDFIUM_DIR}/lib" >&2
     exit 1
@@ -69,6 +71,7 @@ echo "PDFium Functional Test Runner"
 echo "=============================="
 echo "PDFium dir: ${PDFIUM_DIR}"
 echo "Library: ${PDFIUM_LIB}"
+echo "Static: ${USE_STATIC}"
 echo ""
 
 # Create temp directory for build
@@ -81,32 +84,53 @@ trap cleanup EXIT
 # Copy test source
 cp "${SCRIPT_DIR}/test_pdfium.c" "${BUILD_DIR}/"
 
-# Detect compiler
-CC="${CC:-cc}"
-if command -v clang &> /dev/null; then
-    CC="clang"
-elif command -v gcc &> /dev/null; then
-    CC="gcc"
+# Detect compiler - prefer clang++ for C++ stdlib compatibility
+CXX="${CXX:-c++}"
+if command -v clang++ &> /dev/null; then
+    CXX="clang++"
+elif command -v g++ &> /dev/null; then
+    CXX="g++"
 fi
 
-echo "Compiler: ${CC}"
+echo "Compiler: ${CXX}"
 echo ""
 
 # Compile the test
 echo "Compiling test program..."
-COMPILE_CMD="${CC} \
-    -o ${BUILD_DIR}/test_pdfium \
-    ${BUILD_DIR}/test_pdfium.c \
-    -I${PDFIUM_DIR}/include \
-    -L${PDFIUM_DIR}/lib \
-    -lpdfium \
-    -lm \
-    -lstdc++ \
-    -lpthread"
 
-# On Linux, we need to add rpath for shared library
-if [[ "$(uname)" == "Linux" ]]; then
-    COMPILE_CMD="${COMPILE_CMD} -Wl,-rpath,${PDFIUM_DIR}/lib"
+if [[ "${USE_STATIC}" == "true" ]]; then
+    # Static library - need to link all dependencies
+    # PDFium static library built with use_custom_libcxx=false uses system libc++
+    COMPILE_CMD="${CXX} \
+        -o ${BUILD_DIR}/test_pdfium \
+        ${BUILD_DIR}/test_pdfium.c \
+        -I${PDFIUM_DIR}/include \
+        ${PDFIUM_LIB} \
+        -lm \
+        -lpthread \
+        -ldl"
+
+    # Add libc++ on systems that have it (Alpine, or when clang is used)
+    if [[ -f /etc/alpine-release ]] || [[ "${CXX}" == "clang++" ]]; then
+        COMPILE_CMD="${COMPILE_CMD} -stdlib=libc++ -lc++"
+    else
+        COMPILE_CMD="${COMPILE_CMD} -lstdc++"
+    fi
+else
+    # Shared library
+    COMPILE_CMD="${CXX} \
+        -o ${BUILD_DIR}/test_pdfium \
+        ${BUILD_DIR}/test_pdfium.c \
+        -I${PDFIUM_DIR}/include \
+        -L${PDFIUM_DIR}/lib \
+        -lpdfium \
+        -lm \
+        -lpthread"
+
+    # On Linux, we need to add rpath for shared library
+    if [[ "$(uname)" == "Linux" ]]; then
+        COMPILE_CMD="${COMPILE_CMD} -Wl,-rpath,${PDFIUM_DIR}/lib"
+    fi
 fi
 
 echo "  ${COMPILE_CMD}"

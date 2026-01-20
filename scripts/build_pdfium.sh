@@ -495,8 +495,10 @@ cd "${PDFIUM_SRC_DIR}"
 
 GN_ARGS=(
     "is_debug=false"
-    "is_component_build=true"
+    "is_component_build=false"
     "pdf_is_standalone=true"
+    "pdf_enable_v8=false"
+    "pdf_enable_xfa=false"
     "use_sysroot=false"
     "clang_use_chrome_plugins=false"
     "treat_warnings_as_errors=false"
