@@ -544,3 +544,9 @@ echo "-- building pdfium"
 /usr/bin/env ninja -C "${OUT_DIR}" -j "${JOBS}" pdfium
 
 echo "-- build complete"
+echo "-- listing build outputs:"
+ls -la "${OUT_DIR}/" || true
+echo "-- listing obj/ directory:"
+ls -la "${OUT_DIR}/obj/" 2>/dev/null | head -30 || echo "obj/ not found"
+echo "-- searching for libpdfium:"
+find "${OUT_DIR}" -name "libpdfium*" -o -name "pdfium*" 2>/dev/null | head -20 || true
