@@ -300,11 +300,111 @@ jobs:
             --prerelease
           echo "Uploaded to temporary release: $TEMP_TAG"
 
+  test-ubuntu:
+    needs: build-ubuntu
+    runs-on: ${{ matrix.runner }}
+    container: public.ecr.aws/docker/library/ubuntu:24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: self-hosted-amd64
+          - arch: arm64
+            runner: self-hosted-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install test dependencies
+        run: |
+          apt-get update
+          apt-get install -y clang tar xz-utils
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pdfium-ubuntu-${{ matrix.arch }}
+          path: artifact
+      - name: Extract and test
+        run: |
+          mkdir -p pdfium
+          tar xf artifact/*.tar.xz -C pdfium --strip-components=1
+          ls -la pdfium/
+          ls -la pdfium/lib/
+          ls -la pdfium/include/
+          ./tests/functional/run_tests.sh --pdfium-dir pdfium
+
+  test-alpine:
+    needs: build-alpine
+    runs-on: ${{ matrix.runner }}
+    container: public.ecr.aws/docker/library/alpine:3.23
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: self-hosted-amd64
+          - arch: arm64
+            runner: self-hosted-arm64
+    steps:
+      - name: Install test dependencies
+        shell: sh
+        run: |
+          apk add --no-cache bash clang libc++-dev tar xz git
+      # NOTE: Using manual git checkout because actions/checkout@v4 (JavaScript action)
+      # doesn't work in Alpine containers on ARM64 runners
+      - name: Checkout
+        shell: sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          rm -rf .git
+          git init
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout FETCH_HEAD
+      - name: Download artifact (AMD64)
+        if: matrix.arch == 'amd64'
+        uses: actions/download-artifact@v4
+        with:
+          name: pdfium-alpine-${{ matrix.arch }}
+          path: artifact
+      - name: Download artifact (ARM64 via API)
+        if: matrix.arch == 'arm64'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Install gh CLI (static binary works on musl)
+          wget -q "https://github.com/cli/cli/releases/download/v2.62.0/gh_2.62.0_linux_arm64.tar.gz" -O /tmp/gh.tar.gz
+          tar xzf /tmp/gh.tar.gz -C /tmp
+          GH=/tmp/gh_2.62.0_linux_arm64/bin/gh
+          # Download from temp release
+          TEMP_TAG="temp-alpine-arm64-${{ github.run_id }}"
+          mkdir -p artifact
+          $GH release download "$TEMP_TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.tar.xz" \
+            --dir artifact
+          ls -la artifact/
+      - name: Extract and test
+        shell: bash
+        run: |
+          mkdir -p pdfium
+          tar xf artifact/*.tar.xz -C pdfium --strip-components=1
+          ls -la pdfium/
+          ls -la pdfium/lib/
+          ls -la pdfium/include/
+          ./tests/functional/run_tests.sh --pdfium-dir pdfium
+
   release:
     runs-on: self-hosted-amd64
     needs:
       - build-ubuntu
       - build-alpine
+      - test-ubuntu
+      - test-alpine
     steps:
       - name: Install gh CLI
         run: |
