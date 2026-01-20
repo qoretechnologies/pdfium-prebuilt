@@ -495,7 +495,7 @@ cd "${PDFIUM_SRC_DIR}"
 
 GN_ARGS=(
     "is_debug=false"
-    "is_component_build=false"
+    "is_component_build=true"
     "pdf_is_standalone=true"
     "pdf_enable_v8=false"
     "pdf_enable_xfa=false"
@@ -503,6 +503,7 @@ GN_ARGS=(
     "clang_use_chrome_plugins=false"
     "treat_warnings_as_errors=false"
     "target_os=\"linux\""
+    "use_custom_libcxx=false"
 )
 
 # On Alpine, don't set target_cpu to avoid triggering cross-compilation mode
@@ -518,7 +519,6 @@ if [[ -f /etc/alpine-release ]]; then
         "is_clang=true"
         "clang_base_path=\"/usr\""
         "clang_use_chrome_plugins=false"
-        "use_custom_libcxx=false"
         "use_allocator_shim=false"
     )
 elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
