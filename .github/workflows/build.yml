@@ -23,7 +23,7 @@ jobs:
     container: public.ecr.aws/docker/library/ubuntu:resolute
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         include:
           - arch: amd64
@@ -133,7 +133,7 @@ jobs:
     container: public.ecr.aws/docker/library/alpine:3.23
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         include:
           - arch: amd64
