@@ -346,64 +346,61 @@ if [[ "${HOST_ARCH}" == "aarch64" || -f /etc/alpine-release ]]; then
     fi
 fi
 
-# On Alpine ARM64, patch toolchain files to use correct musl target triple
-# PDFium's arm64 toolchain uses --target=aarch64-linux-gnu which is wrong for musl
-# We need to patch both the toolchain definition AND the template file
-if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
-    echo "-- patching arm64 toolchain for musl target triple"
+# On Alpine, patch Linux target triples to use musl instead of glibc.
+if [[ -f /etc/alpine-release ]]; then
+    case "${HOST_ARCH}" in
+        x86_64)
+            MUSL_TRIPLE="x86_64-alpine-linux-musl"
+            GNU_TRIPLES=("x86_64-unknown-linux-gnu" "x86_64-linux-gnu")
+            ;;
+        aarch64)
+            MUSL_TRIPLE="aarch64-alpine-linux-musl"
+            GNU_TRIPLES=("aarch64-linux-gnu" "aarch64-unknown-linux-gnu")
+            ;;
+        *)
+            echo "Unsupported Alpine host architecture for musl triple patch: ${HOST_ARCH}" >&2
+            exit 1
+            ;;
+    esac
+
+    patch_musl_triple_file() {
+        local file="$1"
+        if [[ -f "${file}" ]]; then
+            for triple in "${GNU_TRIPLES[@]}"; do
+                sed -i "s/${triple}/${MUSL_TRIPLE}/g" "${file}"
+            done
+            echo "   patched ${file}"
+            if grep -q "${MUSL_TRIPLE}" "${file}"; then
+                echo "   verified ${MUSL_TRIPLE} in ${file}"
+            fi
+        fi
+    }
+
+    echo "-- patching Linux toolchain for musl target triple: ${MUSL_TRIPLE}"
 
     # Patch the gcc_toolchain.gni template (where target triple is computed)
-    TOOLCHAIN_GNI="${PDFIUM_SRC_DIR}/build/toolchain/gcc_toolchain.gni"
-    if [[ -f "${TOOLCHAIN_GNI}" ]]; then
-        sed -i 's/aarch64-linux-gnu/aarch64-alpine-linux-musl/g' "${TOOLCHAIN_GNI}"
-        echo "   patched ${TOOLCHAIN_GNI}"
-        if grep -q "aarch64-alpine-linux-musl" "${TOOLCHAIN_GNI}"; then
-            echo "   verified aarch64-alpine-linux-musl in gcc_toolchain.gni"
-        fi
-    fi
+    patch_musl_triple_file "${PDFIUM_SRC_DIR}/build/toolchain/gcc_toolchain.gni"
 
     # Patch the Linux toolchain BUILD.gn
-    TOOLCHAIN_GN="${PDFIUM_SRC_DIR}/build/toolchain/linux/BUILD.gn"
-    if [[ -f "${TOOLCHAIN_GN}" ]]; then
-        sed -i 's/aarch64-linux-gnu/aarch64-alpine-linux-musl/g' "${TOOLCHAIN_GN}"
-        echo "   patched ${TOOLCHAIN_GN}"
-        if grep -q "aarch64-alpine-linux-musl" "${TOOLCHAIN_GN}"; then
-            echo "   verified aarch64-alpine-linux-musl in linux/BUILD.gn"
-        fi
-    fi
+    patch_musl_triple_file "${PDFIUM_SRC_DIR}/build/toolchain/linux/BUILD.gn"
 
-    # Patch build/config/compiler/BUILD.gn - this is the CRITICAL file
-    # Lines ~1326-1327 contain: cflags += [ "--target=aarch64-linux-gnu" ]
+    # Patch build/config/compiler/BUILD.gn, where --target is applied.
     COMPILER_GN="${PDFIUM_SRC_DIR}/build/config/compiler/BUILD.gn"
-    echo "   checking ${COMPILER_GN} for target triple..."
-    if [[ -f "${COMPILER_GN}" ]]; then
-        # Show what we're looking for
-        echo "   current aarch64 references in compiler/BUILD.gn:"
-        grep -n "aarch64" "${COMPILER_GN}" | head -5 || echo "   (none found)"
-        # Apply the patch
-        sed -i 's/aarch64-linux-gnu/aarch64-alpine-linux-musl/g' "${COMPILER_GN}"
-        echo "   applied sed substitution to ${COMPILER_GN}"
-        # Verify
-        if grep -q "aarch64-alpine-linux-musl" "${COMPILER_GN}"; then
-            echo "   verified: aarch64-alpine-linux-musl now in compiler/BUILD.gn"
-            grep -n "aarch64-alpine-linux-musl" "${COMPILER_GN}" | head -3
-        else
-            echo "   WARNING: patch may not have been applied - checking content:"
-            grep -n "aarch64" "${COMPILER_GN}" | head -5 || echo "   (no aarch64 references)"
-        fi
-    else
-        echo "   WARNING: ${COMPILER_GN} not found!"
-    fi
+    patch_musl_triple_file "${COMPILER_GN}"
 
-    # Search for any remaining references to aarch64-linux-gnu in the build directory
-    # Use find+xargs instead of grep --include (BusyBox grep doesn't support --include)
-    echo "   checking for remaining aarch64-linux-gnu references..."
-    REMAINING=$(find "${PDFIUM_SRC_DIR}/build" \( -name "*.gn" -o -name "*.gni" \) -exec grep -l "aarch64-linux-gnu" {} \; 2>/dev/null | head -5) || true
+    echo "   checking for remaining glibc triples in build GN files..."
+    REMAINING=""
+    for triple in "${GNU_TRIPLES[@]}"; do
+        MATCHES=$(find "${PDFIUM_SRC_DIR}/build" \( -name "*.gn" -o -name "*.gni" \) -exec grep -l "${triple}" {} \; 2>/dev/null | head -5) || true
+        if [[ -n "${MATCHES}" ]]; then
+            REMAINING="${REMAINING}"$'\n'"${MATCHES}"
+        fi
+    done
     if [[ -n "${REMAINING}" ]]; then
         echo "   warning: remaining references found in:"
-        echo "${REMAINING}"
+        echo "${REMAINING}" | sort -u
     else
-        echo "   no remaining references found"
+        echo "   no remaining glibc triple references found"
     fi
 fi
 
