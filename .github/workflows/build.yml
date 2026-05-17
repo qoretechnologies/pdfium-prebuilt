@@ -17,6 +17,10 @@ on:
 env:
   DEPOT_TOOLS_UPDATE: "0"
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-ubuntu:
     runs-on: ${{ matrix.runner }}

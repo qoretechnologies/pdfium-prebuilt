@@ -111,9 +111,29 @@ fi
 
 mkdir -p "${BUILD_DIR}"
 
+run_with_retries() {
+    local attempt=1
+    local max_attempts="${BUILD_RETRY_ATTEMPTS:-4}"
+    local delay="${BUILD_RETRY_DELAY_SECONDS:-60}"
+    local status
+
+    while true; do
+        "$@" && return 0
+        status=$?
+        if (( attempt >= max_attempts )); then
+            echo "Command failed after ${attempt} attempts: $*" >&2
+            return "${status}"
+        fi
+        echo "-- command failed with exit code ${status}; retrying in ${delay}s (attempt $((attempt + 1))/${max_attempts}): $*" >&2
+        sleep "${delay}"
+        attempt=$((attempt + 1))
+        delay=$((delay * 2))
+    done
+}
+
 if [[ ! -d "${DEPOT_TOOLS_DIR}" ]]; then
     echo "-- fetching depot_tools"
-    git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "${DEPOT_TOOLS_DIR}"
+    run_with_retries git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "${DEPOT_TOOLS_DIR}"
 fi
 
 # On Alpine/musl, create vpython3 wrapper to use system Python
@@ -274,6 +294,7 @@ solutions = [
     "url": "https://pdfium.googlesource.com/pdfium.git",
     "managed": False,
     "custom_vars": {
+      "checkout_configuration": "minimal",
       "download_remoteexec_cfg": False,
     },
     "custom_deps": {
@@ -283,13 +304,13 @@ solutions = [
 ]
 GCLIENT
     # Use --nohooks to skip cipd during initial fetch, patch DEPS, then run hooks
-    gclient sync --nohooks
+    run_with_retries gclient sync --nohooks
     popd >/dev/null
 fi
 
 echo "-- syncing pdfium"
 cd "${PDFIUM_SRC_DIR}"
-git fetch origin
+run_with_retries git fetch origin
 git checkout "${PDFIUM_REF}"
 
 # Remove reclient dependency from DEPS (not available for linux-arm64)
@@ -300,7 +321,7 @@ sed -i "/'buildtools\/reclient':/,/},$/d" "${PDFIUM_SRC_DIR}/DEPS"
 # Sync dependencies for the checked out ref (without hooks - we'll run them after patching)
 echo "-- syncing dependencies"
 cd "${BUILD_DIR}"
-gclient sync --nohooks
+run_with_retries gclient sync --nohooks
 cd "${PDFIUM_SRC_DIR}"
 
 # On Alpine, skip the test_fonts hook (gsutil has six module issues on musl)
@@ -501,7 +522,7 @@ fi
 # Now run hooks (after all patching is done)
 echo "-- running gclient hooks"
 cd "${BUILD_DIR}"
-gclient runhooks
+run_with_retries gclient runhooks
 cd "${PDFIUM_SRC_DIR}"
 
 GN_ARGS=(
