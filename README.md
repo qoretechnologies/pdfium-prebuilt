@@ -3,12 +3,12 @@
 Prebuilt PDFium binaries for Qore CI and Qorus builds.
 
 This repository builds PDFium from a pinned commit and publishes release assets
-for:
+for the current CI base images:
 
-- `linux/amd64` (Ubuntu build)
-- `linux/arm64` (Ubuntu build)
-- `linux/amd64` (Alpine build)
-- `linux/arm64` (Alpine build)
+- `linux/amd64` (Ubuntu resolute build)
+- `linux/arm64` (Ubuntu resolute build)
+- `linux/amd64` (Alpine 3.23 build)
+- `linux/arm64` (Alpine 3.23 build)
 
 Artifacts are published as GitHub Releases and consumed by `qore-test-base`,
 `module-pdf`, and Qorus builds.
@@ -38,7 +38,8 @@ See `docs/STABLE_UPDATE.md` for the exact update procedure.
   --target-os ubuntu \
   --arch amd64 \
   --pdfium-ref <commit> \
-  --chromium-milestone M126
+  --target-image ubuntu:resolute \
+  --chromium-milestone M136
 ```
 
 ## Using artifacts
@@ -55,7 +56,7 @@ Example download:
 
 ```bash
 curl -L -o pdfium.tar.xz \
-  "https://github.com/qoretechnologies/pdfium-prebuilt/releases/download/M126-2026-01-15/pdfium-<commit>-ubuntu-amd64.tar.xz"
+  "https://github.com/qoretechnologies/pdfium-prebuilt/releases/download/M136-2026-01-20/pdfium-<commit>-ubuntu-amd64.tar.xz"
 tar -xf pdfium.tar.xz
 ```
 

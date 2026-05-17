@@ -7,7 +7,7 @@ on:
         description: "PDFium commit hash"
         required: true
       chromium_milestone:
-        description: "Chromium milestone (example: M126)"
+        description: "Chromium milestone (example: M136)"
         required: true
       release_tag:
         description: "Release tag (default: M<milestone>-YYYY-MM-DD)"
@@ -20,7 +20,7 @@ env:
 jobs:
   build-ubuntu:
     runs-on: ${{ matrix.runner }}
-    container: public.ecr.aws/docker/library/ubuntu:24.04
+    container: public.ecr.aws/docker/library/ubuntu:resolute
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -72,7 +72,8 @@ jobs:
           echo "Detected system clang version: ${CLANG_VER}"
 
           # Find where Ubuntu has the clang runtime libs
-          # Ubuntu 24.04 uses /usr/lib/llvm-<ver>/lib/clang/<ver>/lib/linux/
+          # Ubuntu packages clang runtime libraries under
+          # /usr/lib/llvm-<ver>/lib/clang/<ver>/lib/linux/
           UBUNTU_RT_PATH="/usr/lib/llvm-${CLANG_VER}/lib/clang/${CLANG_VER}/lib/linux"
           if [[ ! -d "${UBUNTU_RT_PATH}" ]]; then
             # Try /usr/lib/clang/<ver>/lib/linux as fallback
@@ -118,6 +119,7 @@ jobs:
             --target-os ubuntu \
             --arch "${{ matrix.arch }}" \
             --pdfium-ref "${{ inputs.pdfium_ref }}" \
+            --target-image ubuntu:resolute \
             --chromium-milestone "${{ inputs.chromium_milestone }}"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -256,6 +258,7 @@ jobs:
             --target-os alpine \
             --arch "${{ matrix.arch }}" \
             --pdfium-ref "${{ inputs.pdfium_ref }}" \
+            --target-image alpine:3.23 \
             --chromium-milestone "${{ inputs.chromium_milestone }}"
       - name: Upload artifact (AMD64)
         if: matrix.arch == 'amd64'
@@ -303,7 +306,7 @@ jobs:
   test-ubuntu:
     needs: build-ubuntu
     runs-on: ${{ matrix.runner }}
-    container: public.ecr.aws/docker/library/ubuntu:24.04
+    container: public.ecr.aws/docker/library/ubuntu:resolute
     strategy:
       fail-fast: false
       matrix:

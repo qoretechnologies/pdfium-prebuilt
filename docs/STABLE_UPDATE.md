@@ -26,8 +26,8 @@ Examples:
    - `pdfium_ref`: the commit hash
    - `chromium_milestone`: `M*`
 3) Verify release assets exist for:
-   - `ubuntu/amd64`, `ubuntu/arm64`
-   - `alpine/amd64`, `alpine/arm64`
+   - Ubuntu resolute: `ubuntu/amd64`, `ubuntu/arm64`
+   - Alpine 3.23: `alpine/amd64`, `alpine/arm64`
 4) Update consumers:
    - `qore-test-base` Docker images
    - Qorus builds

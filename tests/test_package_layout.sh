@@ -32,6 +32,7 @@ DIST_DIR="${WORK_DIR}/dist"
     --target-os ubuntu \
     --arch amd64 \
     --pdfium-ref deadbeef \
+    --target-image ubuntu:resolute \
     --chromium-milestone M126 \
     --dist-dir "${DIST_DIR}"
 
@@ -48,3 +49,6 @@ echo "${CONTENTS}" | grep -q "include/cpp/fpdfview.h"
 echo "${CONTENTS}" | grep -q "lib/libpdfium.so"
 
 echo "${CONTENTS}" | grep -q "VERSION"
+
+VERSION=$(tar -xOf "${TARBALL}" ./VERSION)
+echo "${VERSION}" | grep -q "TARGET_IMAGE=ubuntu:resolute"

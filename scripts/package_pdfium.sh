@@ -7,7 +7,8 @@ print_usage() {
 Usage: package_pdfium.sh --pdfium-src <path> --pdfium-out <path> --target-os <ubuntu|alpine> --arch <amd64|arm64> --pdfium-ref <commit> --chromium-milestone <M*> [options]
 
 Options:
-  --dist-dir <path>   Output directory for release artifacts (default: ./dist)
+  --dist-dir <path>       Output directory for release artifacts (default: ./dist)
+  --target-image <image>  Build container target recorded in VERSION metadata
 USAGE
 }
 
@@ -17,6 +18,7 @@ TARGET_OS=""
 ARCH=""
 PDFIUM_REF=""
 CHROMIUM_MILESTONE=""
+TARGET_IMAGE=""
 DIST_DIR=""
 
 while [[ $# -gt 0 ]]; do
@@ -43,6 +45,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --chromium-milestone)
             CHROMIUM_MILESTONE="$2"
+            shift 2
+            ;;
+        --target-image)
+            TARGET_IMAGE="$2"
             shift 2
             ;;
         --dist-dir)
@@ -131,6 +137,9 @@ TARGET_OS=${TARGET_OS}
 ARCH=${ARCH}
 BUILD_DATE_UTC=${BUILD_DATE}
 EOF_META
+if [[ -n "${TARGET_IMAGE}" ]]; then
+    echo "TARGET_IMAGE=${TARGET_IMAGE}" >> "${STAGE_DIR}/VERSION"
+fi
 
 # Sanitize ref name for filename (replace / with -)
 SAFE_REF="${PDFIUM_REF//\//-}"
