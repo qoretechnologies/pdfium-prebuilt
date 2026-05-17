@@ -39,7 +39,7 @@ See `docs/STABLE_UPDATE.md` for the exact update procedure.
   --arch amd64 \
   --pdfium-ref <commit> \
   --target-image ubuntu:resolute \
-  --chromium-milestone M136
+  --chromium-milestone M148
 ```
 
 ## Using artifacts
@@ -56,7 +56,7 @@ Example download:
 
 ```bash
 curl -L -o pdfium.tar.xz \
-  "https://github.com/qoretechnologies/pdfium-prebuilt/releases/download/M136-2026-01-20/pdfium-<commit>-ubuntu-amd64.tar.xz"
+  "https://github.com/qoretechnologies/pdfium-prebuilt/releases/download/M148-2026-05-17/pdfium-<commit>-ubuntu-amd64.tar.xz"
 tar -xf pdfium.tar.xz
 ```
 
