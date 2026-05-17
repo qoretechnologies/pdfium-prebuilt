@@ -320,23 +320,25 @@ print("   removed test_fonts hook from DEPS")
 PYTHON
 fi
 
-# Patch build config to disable CREL when using system clang (ARM64 or Alpine)
-# The CREL flags are added by Chromium's build config based on bundled clang version,
-# but system clang (18-21) doesn't support the experimental --crel flag
+# Patch Chromium-clang-only flags when using system clang (ARM64 or Alpine).
+# PDFium's build config tracks Chromium's bundled clang, but Linux ARM64 and
+# Alpine use the distro clang because Chromium only ships Linux x64 clang.
 if [[ "${HOST_ARCH}" == "aarch64" || -f /etc/alpine-release ]]; then
-    echo "-- patching build config to disable CREL for system clang"
+    echo "-- patching build config for system clang"
     COMPILER_GN="${PDFIUM_SRC_DIR}/build/config/compiler/BUILD.gn"
     if [[ -f "${COMPILER_GN}" ]]; then
-        # Comment out the CREL-related assembler flags
-        # The line format is: cflags += [ "-Wa,--crel,--allow-experimental-crel" ]
+        # Comment out the CREL-related assembler flags.
         sed -i 's/cflags += \[ "-Wa,--crel,--allow-experimental-crel" \]/# Disabled for system clang: cflags += [ "-Wa,--crel,--allow-experimental-crel" ]/' "${COMPILER_GN}"
+        # Remove flags supported by Chromium's bundled clang but not by distro clang.
+        sed -i '/"-fno-lifetime-dse"/d' "${COMPILER_GN}"
+        sed -i '/"-fsanitize-ignore-for-ubsan-feature=array-bounds"/d' "${COMPILER_GN}"
+        sed -i '/"-fsanitize-ignore-for-ubsan-feature=return"/d' "${COMPILER_GN}"
         echo "   patched ${COMPILER_GN}"
-        # Verify the patch was applied
-        if grep -q "# Disabled for system clang" "${COMPILER_GN}"; then
-            echo "   patch verified"
+        if grep -q -E '("-fno-lifetime-dse"|"-fsanitize-ignore-for-ubsan-feature=|^[[:space:]]*cflags \+= \[ "-Wa,--crel,--allow-experimental-crel")' "${COMPILER_GN}"; then
+            echo "   warning: remaining system-clang-incompatible flags found"
+            grep -n -E '("-fno-lifetime-dse"|"-fsanitize-ignore-for-ubsan-feature=|^[[:space:]]*cflags \+= \[ "-Wa,--crel,--allow-experimental-crel")' "${COMPILER_GN}" || true
         else
-            echo "   warning: patch may not have been applied correctly"
-            grep -n "crel" "${COMPILER_GN}" || echo "   no crel references found"
+            echo "   system clang patch verified"
         fi
     else
         echo "   warning: ${COMPILER_GN} not found"
