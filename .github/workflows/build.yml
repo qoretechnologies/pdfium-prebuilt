@@ -19,10 +19,7 @@ env:
 
 jobs:
   build-ubuntu:
-    runs-on:
-      - self-hosted
-      - linux
-      - ${{ matrix.runner_arch }}
+    runs-on: ${{ matrix.runner }}
     container: public.ecr.aws/docker/library/ubuntu:resolute
     strategy:
       fail-fast: false
@@ -30,9 +27,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner_arch: x64
+            runner: self-hosted-amd64
           - arch: arm64
-            runner_arch: arm64
+            runner: self-hosted-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -132,10 +129,7 @@ jobs:
 
   build-alpine:
     needs: build-ubuntu
-    runs-on:
-      - self-hosted
-      - linux
-      - ${{ matrix.runner_arch }}
+    runs-on: ${{ matrix.runner }}
     container: public.ecr.aws/docker/library/alpine:3.23
     strategy:
       fail-fast: false
@@ -143,9 +137,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner_arch: x64
+            runner: self-hosted-amd64
           - arch: arm64
-            runner_arch: arm64
+            runner: self-hosted-arm64
     env:
       VPYTHON_BYPASS: "1"
     steps:
@@ -311,19 +305,16 @@ jobs:
 
   test-ubuntu:
     needs: build-ubuntu
-    runs-on:
-      - self-hosted
-      - linux
-      - ${{ matrix.runner_arch }}
+    runs-on: ${{ matrix.runner }}
     container: public.ecr.aws/docker/library/ubuntu:resolute
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
-            runner_arch: x64
+            runner: self-hosted-amd64
           - arch: arm64
-            runner_arch: arm64
+            runner: self-hosted-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -347,19 +338,16 @@ jobs:
 
   test-alpine:
     needs: build-alpine
-    runs-on:
-      - self-hosted
-      - linux
-      - ${{ matrix.runner_arch }}
+    runs-on: ${{ matrix.runner }}
     container: public.ecr.aws/docker/library/alpine:3.23
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
-            runner_arch: x64
+            runner: self-hosted-amd64
           - arch: arm64
-            runner_arch: arm64
+            runner: self-hosted-arm64
     steps:
       - name: Install test dependencies
         shell: sh
@@ -414,10 +402,7 @@ jobs:
           ./tests/functional/run_tests.sh --pdfium-dir pdfium
 
   release:
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
+    runs-on: self-hosted-amd64
     needs:
       - build-ubuntu
       - build-alpine
