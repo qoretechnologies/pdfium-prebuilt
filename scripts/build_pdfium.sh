@@ -166,21 +166,27 @@ if [[ -f /etc/alpine-release ]]; then
     echo "-- setting PYTHONPATH for Alpine: ${PYTHONPATH}"
 fi
 
-# Use system gn on Alpine (musl compatibility) or ARM64 (depot_tools downloads x86_64 binaries)
-# On Ubuntu x86_64, use depot_tools gn (system gn is too old, missing path_exists function)
+# Use system gn on Alpine for musl compatibility. On Ubuntu, avoid the distro
+# gn because current PDFium build files require newer substitution patterns.
 HOST_ARCH=$(uname -m)
 if [[ -f /etc/alpine-release && -x /usr/bin/gn ]]; then
     GN_CMD="/usr/bin/gn"
     echo "-- using system gn (Alpine): ${GN_CMD}"
-elif [[ "${HOST_ARCH}" == "aarch64" && -x /usr/bin/gn ]]; then
-    GN_CMD="/usr/bin/gn"
-    echo "-- using system gn (ARM64): ${GN_CMD}"
+elif [[ "${HOST_ARCH}" == "aarch64" ]]; then
+    echo "-- installing GN from CIPD (ARM64)"
+    "${DEPOT_TOOLS_DIR}/ensure_bootstrap"
+    GN_CIPD_DIR="${BUILD_DIR}/gn-arm64"
+    mkdir -p "${GN_CIPD_DIR}"
+    cipd install gn/gn/linux-arm64 latest -root "${GN_CIPD_DIR}"
+    GN_CMD="${GN_CIPD_DIR}/gn"
 else
     # Bootstrap depot_tools to ensure gn is available
     echo "-- bootstrapping depot_tools gn"
     "${DEPOT_TOOLS_DIR}/ensure_bootstrap"
     GN_CMD="gn"
 fi
+echo "-- using GN: ${GN_CMD}"
+"${GN_CMD}" --version
 
 # Create a cipd wrapper directory that comes FIRST in PATH
 # This ensures our wrapper is called instead of depot_tools/cipd
