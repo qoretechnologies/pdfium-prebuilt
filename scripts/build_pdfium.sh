@@ -294,11 +294,12 @@ solutions = [
     "url": "https://pdfium.googlesource.com/pdfium.git",
     "managed": False,
     "custom_vars": {
-      "checkout_configuration": "minimal",
+      "checkout_configuration": "small",
       "download_remoteexec_cfg": False,
     },
     "custom_deps": {
       "buildtools/reclient": None,
+      "v8": None,
     },
   },
 ]
