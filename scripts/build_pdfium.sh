@@ -333,10 +333,11 @@ if [[ "${HOST_ARCH}" == "aarch64" || -f /etc/alpine-release ]]; then
         sed -i '/"-fno-lifetime-dse"/d' "${COMPILER_GN}"
         sed -i '/"-fsanitize-ignore-for-ubsan-feature=array-bounds"/d' "${COMPILER_GN}"
         sed -i '/"-fsanitize-ignore-for-ubsan-feature=return"/d' "${COMPILER_GN}"
+        sed -i '/"-Wno-unsafe-buffer-usage-in-static-sized-array"/d' "${COMPILER_GN}"
         echo "   patched ${COMPILER_GN}"
-        if grep -q -E '("-fno-lifetime-dse"|"-fsanitize-ignore-for-ubsan-feature=|^[[:space:]]*cflags \+= \[ "-Wa,--crel,--allow-experimental-crel")' "${COMPILER_GN}"; then
+        if grep -q -E '("-fno-lifetime-dse"|"-fsanitize-ignore-for-ubsan-feature=|"-Wno-unsafe-buffer-usage-in-static-sized-array"|^[[:space:]]*cflags \+= \[ "-Wa,--crel,--allow-experimental-crel")' "${COMPILER_GN}"; then
             echo "   warning: remaining system-clang-incompatible flags found"
-            grep -n -E '("-fno-lifetime-dse"|"-fsanitize-ignore-for-ubsan-feature=|^[[:space:]]*cflags \+= \[ "-Wa,--crel,--allow-experimental-crel")' "${COMPILER_GN}" || true
+            grep -n -E '("-fno-lifetime-dse"|"-fsanitize-ignore-for-ubsan-feature=|"-Wno-unsafe-buffer-usage-in-static-sized-array"|^[[:space:]]*cflags \+= \[ "-Wa,--crel,--allow-experimental-crel")' "${COMPILER_GN}" || true
         else
             echo "   system clang patch verified"
         fi
@@ -450,24 +451,29 @@ if [[ -f /etc/alpine-release && "${HOST_ARCH}" == "aarch64" ]]; then
     fi
 
     # Patch page_allocator_internals_posix.cc - musl doesn't support ifunc attribute
-    # Insert a musl-specific GetAccessFlags function before the namespace closing brace
+    # Insert a musl-specific GetAccessFlags function only for older sources
+    # that do not already provide a non-ifunc fallback.
     PAGE_ALLOC_POSIX="${PDFIUM_SRC_DIR}/base/allocator/partition_allocator/src/partition_alloc/page_allocator_internals_posix.cc"
     if [[ -f "${PAGE_ALLOC_POSIX}" ]]; then
-        # Insert before the final "}  // namespace" line using awk
-        awk '
-        /^}  \/\/ namespace partition_alloc::internal$/ {
-            print ""
-            print "// MUSL_PATCH: musl does not support ifunc attribute, provide direct implementation"
-            print "#if !defined(__GLIBC__)"
-            print "int GetAccessFlags(PageAccessibilityConfiguration accessibility) {"
-            print "  return GetAccessFlags<false, false>(accessibility);"
-            print "}"
-            print "#endif"
-            print ""
-        }
-        { print }
-        ' "${PAGE_ALLOC_POSIX}" > "${PAGE_ALLOC_POSIX}.tmp" && mv "${PAGE_ALLOC_POSIX}.tmp" "${PAGE_ALLOC_POSIX}"
-        echo "   patched ${PAGE_ALLOC_POSIX} to add musl fallback"
+        if grep -q "return GetAccessFlags<false, false>(accessibility);" "${PAGE_ALLOC_POSIX}"; then
+            echo "   ${PAGE_ALLOC_POSIX} already has a non-ifunc fallback"
+        else
+            # Insert before the final "}  // namespace" line using awk.
+            awk '
+            /^}  \/\/ namespace partition_alloc::internal$/ {
+                print ""
+                print "// MUSL_PATCH: musl does not support ifunc attribute, provide direct implementation"
+                print "#if !defined(__GLIBC__)"
+                print "int GetAccessFlags(PageAccessibilityConfiguration accessibility) {"
+                print "  return GetAccessFlags<false, false>(accessibility);"
+                print "}"
+                print "#endif"
+                print ""
+            }
+            { print }
+            ' "${PAGE_ALLOC_POSIX}" > "${PAGE_ALLOC_POSIX}.tmp" && mv "${PAGE_ALLOC_POSIX}.tmp" "${PAGE_ALLOC_POSIX}"
+            echo "   patched ${PAGE_ALLOC_POSIX} to add musl fallback"
+        fi
     fi
 fi
 
